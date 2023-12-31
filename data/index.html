@@ -1,0 +1,56 @@
+<!DOCTYPE HTML><html>
+<head>
+  <title>ESP IOT DASHBOARD</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="style2.css">
+  <link rel="icon"  type="image/png" href="favicon.png">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+</head>
+<body>
+  <div class="topnav">
+    <h1>Hello! Ezen az IP-cimen az ESP32 ventillator vezerlo mukodik!. Webserial: IP/webserial.</h1>
+	<h2>Parancsok: help, reset, wifireset, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off,</h2>
+	<h2>vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(szam), alapteljesitmeny(szam), elsozona(szam), masodikzona(szam), zonak?,</h2>
+	<h2>kesleltetesnulla(szam), kesleltetesegy(szam), kesleltetesketto(szam), kesleltetesharom(szam), kesleltetessprint(szam), kesleltetesend(szam), kesleltetesek?</h2>
+  </div>
+  <div class="content">
+    <div class="card-grid">
+        <div class="card">             
+            <p class="card-title"><i class="fas fa-lightbulb"></i> VENTILLATOR 1. FOKOZAT</p>
+            <label class="switch">
+                <input type="checkbox" onchange="toggleCheckbox(this)" id="10">
+                <span class="slider"></span>
+            </label>
+            <p class ="state">State: <span id="10s"></span></p>
+        </div>
+        <div class="card">
+            <p class="card-title"><i class="fas fa-lightbulb"></i> VENTILLATOR 2. FOKOZAT</p>
+            <label class="switch">
+                <input type="checkbox" onchange="toggleCheckbox(this)" id="9">
+                <span class="slider"></span>
+            </label>
+            <p class ="state">State: <span id="9s"></span></p>
+        </div>
+        <div class="card">
+            <p class="card-title"><i class="fas fa-lightbulb"></i> VENTILLATOR 3. FOKOZAT</p>
+            <label class="switch">
+                <input type="checkbox" onchange="toggleCheckbox(this)" id="8">
+                <span class="slider"></span>
+            </label>
+            <p class ="state">State: <span id="8s"></span></p>
+        </div>
+        <div class="card">
+            <p class="card-title"><i class="fas fa-lightbulb"></i> ALJZAT</p>
+            <label class="switch">
+                <input type="checkbox" onchange="toggleCheckbox(this)" id="2">
+                <span class="slider"></span>
+            </label>
+            <p class="state">State: <span id="2s"></span></p>
+        </div>
+    </div>
+</div>
+<script src="/script.js"></script>
+</body>
+</html>
+
+
