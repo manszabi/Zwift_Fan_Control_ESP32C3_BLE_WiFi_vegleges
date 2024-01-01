@@ -83,6 +83,8 @@ bool stopServer = false;
 #define watchdogMinCounter 0
 static uint32_t watchdogCounter = watchdogMinCounter;
 uint32_t fromBootCounter = 0;
+uint32_t timetosleep = 900; //ennyi ido utan sleep, masodperc
+uint32_t forSleepTime = timetosleep; 
 
 static uint8_t scanTime = 0;     // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
 static uint8_t intervallum = 10; // ennyi atlagat veszi
@@ -397,6 +399,7 @@ String processor(const String &var)
 
 void alapparameter()
 {
+  forSleepTime = timetosleep;
   periodrele = 0;
   connected = false;
   notification = false;
@@ -1181,13 +1184,13 @@ void fct_ledUpdate()
 
 void fct_Watchdog()
 {
-  if (watchdogCounter < 0 || watchdogCounter > 900) // ha gond lenne
+  if (watchdogCounter < 0 || watchdogCounter > forSleepTime) // ha gond lenne
   {
     watchdogCounter = 0;
   }
   watchdogCounter++;
-  if (watchdogCounter == 900)
-  { // 15 perc
+  if (watchdogCounter == forSleepTime)
+  {
     digitalWrite(LED_wifi, LOW);
     allrelayoff(); // relek kikapcsolása
     digitalWrite(relayOutlet, HIGH);
@@ -1205,6 +1208,8 @@ void fct_WatchdogReset()
 void click()
 {
   fct_WatchdogReset();
+  fromBootCounter = 0;
+  counterFromBoot.start();
   ledPwmBlinking(1);
 }
 
@@ -1489,7 +1494,12 @@ void loop()
         notification = true;
       }
       digitalWrite(relayOutlet, LOW); // hosszabító bekapcsolása
-      fct_WatchdogReset();
+      if (adat > 0)
+      {
+        fct_WatchdogReset();
+      } else if (adat == 0) {
+        forSleepTime = timetosleep * 2;
+      }
       atlagolas();
       ventillatorvezerles();
       kiiras();
