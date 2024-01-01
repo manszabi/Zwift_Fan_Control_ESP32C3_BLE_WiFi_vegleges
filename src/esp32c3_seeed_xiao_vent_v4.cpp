@@ -1275,7 +1275,11 @@ void ledPwmBlinking(int blinkNumber)
 
 void fct_counterFromBoot()
 {
-  while (fromBootCounter <= 300)
+  if (fromBootCounter < 0) // ha gond lenne
+  {
+    fromBootCounter = 0;
+  }
+  if (fromBootCounter < 300)
   {
     fromBootCounter++;
   }
@@ -1319,6 +1323,7 @@ void setup()
   // attach the channel to the GPIO to be controlled
   ledcAttachPin(LED_eeprom, ledChannel);
   allrelayoff();
+  digitalWrite(relayOutlet, HIGH); // hosszabító lekapcsolása BOOT utan
   initSPIFFS();
   initWebSocket();
   watchDOG.start();
@@ -1514,7 +1519,7 @@ void loop2(void *pvParameter)
       ws.cleanupClients();
     }
     watchDOG.update();
-    while (fromBootCounter <= 300)
+    if (fromBootCounter < 300)
     {
       counterFromBoot.update();
     }
