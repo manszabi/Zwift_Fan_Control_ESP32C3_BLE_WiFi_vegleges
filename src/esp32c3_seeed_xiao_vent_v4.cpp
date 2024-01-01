@@ -63,22 +63,26 @@ void LongPressStop();
 void fct_OnStateLed();
 void fct_OnStateLedWithWifi();
 void fct_OnStateLedBleConnected();
+void fct_counterFromBoot();
 void loop2(void *pvParameter);
 void ledPwmBlinking(int blinkNumber);
 
 TickTwo watchDOG(fct_Watchdog, 1000, 0, MILLIS);
+TickTwo counterFromBoot(fct_counterFromBoot, 1000, 0, MILLIS);
 TickTwo ledUpdate(fct_ledUpdate, 1000, 0, MILLIS);
 TickTwo OnStateLed(fct_OnStateLed, 50);
 TickTwo OnStateLedWithWifi(fct_OnStateLedWithWifi, 300);
 TickTwo OnStateLedBleConnected(fct_OnStateLedBleConnected, 900);
 bool ledStateOnstateLed;
 bool ledStateWifistateLed;
+bool stopServer = false;
 
 #define BUTTON_PIN_BITMASK 0x200000000 // 2^33 in hex
 // const uint64_t WAKEUP_LOW_PIN_BITMASK = 0b001111;
 
 #define watchdogMinCounter 0
 static uint32_t watchdogCounter = watchdogMinCounter;
+uint32_t fromBootCounter = 0;
 
 static uint8_t scanTime = 0;     // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
 static uint8_t intervallum = 10; // ennyi atlagat veszi
@@ -118,8 +122,8 @@ uint32_t kesleltetes2;
 uint32_t kesleltetes3;
 uint32_t kesleltetessprint;
 char welcome[] = "Hello! Ezen az IP cimen az ESP32 ventillator vezerlo mukodik!. Webserial: IP/webserial. ";
-char help1[] = "Parancsok: help, reset, wifireset, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off, vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(szam), alapteljesitmeny(szam), elsozona(szam), masodikzona(szam), zonak? ";
-char help2[] = ",kesleltetesnulla(szam), kesleltetesegy(szam), kesleltetesketto(szam), kesleltetesharom(szam), kesleltetessprint(szam), kesleltetesend(szam), kesleltetesek?";
+char help1[] = "Parancsok: help, reset, wifireset, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off, vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(watt/bpm), alapteljesitmeny(watt/bpm), elsozona(watt/bpm), masodikzona(watt/bpm), zonak? ";
+char help2[] = ",kesleltetesnulla(masodperc), kesleltetesegy(masodperc), kesleltetesketto(masodperc), kesleltetesharom(masodperc), kesleltetessprint(masodperc), kesleltetesend(masodperc), kesleltetesek?";
 
 String inString = "";
 
@@ -406,7 +410,6 @@ void alapparameter()
 void allrelayoff()
 {
   ledcWrite(ledChannel, 0);
-  digitalWrite(relayOutlet, HIGH);
   for (uint8_t b = 1; b <= NUM_RELAYS; b++)
   { // minden rele elengedese, a kimenetket magas szintre kell allitani
     pinMode(relayGPIOs[b - 1], OUTPUT);
@@ -429,14 +432,14 @@ void setDelay(String d, String index, uint32_t &delay, uint16_t eepromAddress, u
     if (inString.toInt() != 0 && inString.toInt() > 0 && inString.toInt() < maxDelay)
     {
       uint32_t i = inString.toInt();
-      delay = i;
+      delay = i * 1000;
       EEPROM.put(eepromAddress, i);
       eeprom_commit();
       WebSerial.print("A ");
       WebSerial.print(index);
       WebSerial.print(": ");
-      WebSerial.print(delay);
-      WebSerial.println(" értékű lett.");
+      WebSerial.print(delay / 1000);
+      WebSerial.println(" másodperc értékű lett.");
     }
     else
     {
@@ -674,13 +677,24 @@ void recvMsg(uint8_t *adat, size_t len)
     else if (erzekelo == 0)
     {
       WebSerial.println("Parameter hiba! reset kell!");
+      WebSerial.println("Ujrainditas!");
+      unsigned long time_start_reset = millis();
+      while ((millis() - time_start_reset) < 1000)
+      {
+        ;
+      }
+      erzekelo = 222; // alapbol wattmero lesz
+      EEPROM.put(120, erzekelo);
+      eeprom_commit();
+      ledPwmBlinking(3);
+      ESP.restart();
     }
   }
 }
 
 static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)
 {
-  ESP_LOG_BUFFER_HEX("my value", pData, length); //valahol olvastam, igy működik valamiért
+  ESP_LOG_BUFFER_HEX("my value", pData, length); // valahol olvastam, igy működik valamiért
   // server
   if (deviceConnected)
   {
@@ -750,7 +764,7 @@ void atlagolas()
     szamlalo--;
     teljesitmenytemp += adat;
   }
-  else if (szamlalo < 0) // hiba, nem lehet nullánál kisebb
+  else if (szamlalo < 0 || szamlalo > intervallum) // hiba, nem lehet nullánál kisebb vagy az intervallumnal nagyobb
   {
     szamlalo = intervallum;
   }
@@ -875,26 +889,26 @@ void kiirzonak()
   WebSerial.print(ZONE_2);
   WebSerial.print(" sprintzona: ");
   WebSerial.print(sprintzona);
-  WebSerial.println(" értékű.");
+  WebSerial.println(" (watt/bpm) értékű.");
 }
 
 void kiirkesleltetesek()
 {
   WebSerial.print("A kesleltetes0: ");
-  WebSerial.print(kesleltetes0);
+  WebSerial.print(kesleltetes0 / 1000);
   WebSerial.print(" kesleltetes1 ");
-  WebSerial.print(kesleltetes1);
+  WebSerial.print(kesleltetes1 / 1000);
   WebSerial.print(" kesleltetes2: ");
-  WebSerial.print(kesleltetes2);
+  WebSerial.print(kesleltetes2 / 1000);
   WebSerial.print(" kesleltetes3: ");
-  WebSerial.print(kesleltetes3);
+  WebSerial.print(kesleltetes3 / 1000);
   WebSerial.print(" kesleltetessprint: ");
-  WebSerial.print(kesleltetessprint);
+  WebSerial.print(kesleltetessprint / 1000);
   WebSerial.print(" kesleltetesend: ");
-  WebSerial.print(kesleltetesend);
+  WebSerial.print(kesleltetesend / 1000);
   WebSerial.print(" 'periodrele' valtozo erteke: ");
-  WebSerial.print(periodrele);
-  WebSerial.println(" értékű.");
+  WebSerial.print(periodrele / 1000);
+  WebSerial.println(" másodperc értékű.");
 }
 
 void kiiras()
@@ -1050,7 +1064,7 @@ void eeprom_check()
     EEPROM.write(1, 0xAA);
     EEPROM.commit();
   }
-  }
+}
 
 void eeprom_commit()
 {
@@ -1060,7 +1074,7 @@ void eeprom_commit()
 void checkAndReset(int value, uint32_t defaultValue, uint16_t address, const char *name)
 {
   uint32_t upperLimit;
-  if (reset == 1 || erzekelo == 0 || ZONE_2 == 0 || kesleltetes3 == 0) // szuroprobaszeruen megnez par erteket
+  if (reset == 1 || teszteles < 0 || teszteles > 1 || erzekelo == 0 || ZONE_1 == 0 || ZONE_2 == 0 || kesleltetes0 == 0 || sprintzona == 0 || kesleltetes1 == 0 || kesleltetes2 == 0 || kesleltetes3 == 0 || kesleltetessprint == 0 || kesleltetesend == 0 || alapteljesitmeny == 0) // szuroprobaszeruen megnez par erteket
   {
     value = defaultValue;
     EEPROM.put(address, value);
@@ -1135,7 +1149,6 @@ void bleszerver(BLEUUID serviceUUID, BLEUUID charUUID)
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);
   BLEDevice::startAdvertising();
-  // Serial.println("Waiting a client connection to notify...");
 }
 
 void fct_ledUpdate()
@@ -1168,16 +1181,17 @@ void fct_ledUpdate()
 
 void fct_Watchdog()
 {
+  if (watchdogCounter < 0 || watchdogCounter > 900) // ha gond lenne
+  {
+    watchdogCounter = 0;
+  }
   watchdogCounter++;
   if (watchdogCounter == 900)
   { // 15 perc
     digitalWrite(LED_wifi, LOW);
     allrelayoff(); // relek kikapcsolása
-    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
-              {
-      request->send(200, "text/plain", "Going to sleep now!");
-      delay(3000); });
-    digitalWrite(relayEN, LOW); // eloszto kikapcsolása
+    digitalWrite(relayOutlet, HIGH);
+    digitalWrite(relayEN, LOW);
     ledPwmBlinking(3);
     esp_deep_sleep_start();
   }
@@ -1259,6 +1273,34 @@ void ledPwmBlinking(int blinkNumber)
   ledcWrite(ledChannel, 0);
 }
 
+void fct_counterFromBoot()
+{
+  while (fromBootCounter <= 300)
+  {
+    fromBootCounter++;
+  }
+  if (fromBootCounter == 30)
+  {
+    digitalWrite(relayOutlet, LOW); // hosszabító bekapcsolása - edzogorgo felkapcsolasa
+  }
+  if (fromBootCounter == 120)
+  {
+    if (!connected)
+    {
+      digitalWrite(relayOutlet, HIGH); // hosszabító lekapcsolása ha nincs bluetooth csatlakozas
+    }
+  }
+  if (fromBootCounter == 300) // lcd webserver leállítása
+  {
+    Serial.end();
+    lcd.noBacklight();
+    lcd.noDisplay();
+    server.end();
+    stopServer = true;
+    counterFromBoot.stop();
+  }
+}
+
 void setup()
 {
   pinMode(LED_wifi, OUTPUT);    // gpio4
@@ -1281,6 +1323,7 @@ void setup()
   initWebSocket();
   watchDOG.start();
   ledUpdate.start();
+  counterFromBoot.start();
   OnStateLedBleConnected.stop();
   OnStateLedWithWifi.stop();
   OnStateLed.stop();
@@ -1465,13 +1508,20 @@ void loop2(void *pvParameter)
 
   while (1)
   {
+    if (!stopServer)
+    {
+      ElegantOTA.loop();
+      ws.cleanupClients();
+    }
     watchDOG.update();
+    while (fromBootCounter <= 300)
+    {
+      counterFromBoot.update();
+    }
     ledUpdate.update();
     OnStateLedBleConnected.update();
     OnStateLed.update();
     OnStateLedWithWifi.update();
     button.tick();
-    ElegantOTA.loop();
-    ws.cleanupClients();
   }
 }
