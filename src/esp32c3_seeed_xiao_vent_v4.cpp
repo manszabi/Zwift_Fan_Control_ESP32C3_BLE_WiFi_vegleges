@@ -55,6 +55,7 @@ void readeepromparameter();
 void blekliens();
 void bleszerver(BLEUUID serviceUUID, BLEUUID charUUID);
 void fct_Watchdog();
+void fct_goToSleep();
 void fct_ledUpdate();
 void fct_WatchdogReset();
 void click();
@@ -83,7 +84,7 @@ bool stopServer = false;
 #define watchdogMinCounter 0
 static uint32_t watchdogCounter = watchdogMinCounter;
 uint32_t fromBootCounter = 0;
-uint32_t timetosleep = 900; //ennyi ido utan sleep, masodperc
+uint32_t timetosleep = 360; //ennyi ido utan sleep, masodperc
 uint32_t forSleepTime = timetosleep; 
 
 static uint8_t scanTime = 0;     // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
@@ -1209,6 +1210,7 @@ void click()
 {
   fct_WatchdogReset();
   fromBootCounter = 0;
+  stopServer = false;
   counterFromBoot.start();
   ledPwmBlinking(1);
 }
@@ -1288,7 +1290,7 @@ void fct_counterFromBoot()
   {
     fromBootCounter++;
   }
-  if (fromBootCounter == 30)
+  if (fromBootCounter == 15)
   {
     digitalWrite(relayOutlet, LOW); // hosszabító bekapcsolása - edzogorgo felkapcsolasa
   }
@@ -1307,6 +1309,18 @@ void fct_counterFromBoot()
     server.end();
     stopServer = true;
     counterFromBoot.stop();
+  }
+}
+
+void fct_goToSleep()
+{
+  delay(500);
+
+  uint64_t GPIO_reason = esp_sleep_get_gpio_wakeup_status();
+  
+  if (GPIO_reason == 0)
+  {
+    esp_deep_sleep_start();
   }
 }
 
@@ -1411,6 +1425,7 @@ void setup()
   // ElegantOTA callbacks
   WebSerial.begin(&server);
   WebSerial.msgCallback(recvMsg);
+  fct_goToSleep();
   lcd.init(); // lcd bekapcsolasa, ketszer kell beirni, mivel lassu az lcd modul, hibak lehetnek a kijelzessel he nem igy tettem
   lcd.init();
   lcd.createChar(0, delta);
