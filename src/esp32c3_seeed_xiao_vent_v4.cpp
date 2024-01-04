@@ -84,8 +84,8 @@ bool stopServer = false;
 #define watchdogMinCounter 0
 static uint32_t watchdogCounter = watchdogMinCounter;
 uint32_t fromBootCounter = 0;
-uint32_t timetosleep = 360; //ennyi ido utan sleep, masodperc
-uint32_t forSleepTime = timetosleep; 
+uint32_t timetosleep = 360; // ennyi ido utan sleep, masodperc
+uint32_t forSleepTime = timetosleep;
 
 static uint8_t scanTime = 0;     // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
 static uint8_t intervallum = 10; // ennyi atlagat veszi
@@ -1185,9 +1185,9 @@ void fct_ledUpdate()
 
 void fct_Watchdog()
 {
-  if (watchdogCounter < 0 || watchdogCounter > forSleepTime) // ha gond lenne
+  if (watchdogCounter < 0 || watchdogCounter > forSleepTime) // ha gond lenne, ill ha adat == 0
   {
-    watchdogCounter = 0;
+    watchdogCounter = 0; // watchdogreset
   }
   watchdogCounter++;
   if (watchdogCounter == forSleepTime)
@@ -1290,11 +1290,11 @@ void fct_counterFromBoot()
   {
     fromBootCounter++;
   }
-  if (fromBootCounter == 15)
+  if (fromBootCounter == 5)
   {
     digitalWrite(relayOutlet, LOW); // hosszabító bekapcsolása - edzogorgo felkapcsolasa
   }
-  if (fromBootCounter == 120)
+  if (fromBootCounter == 60)
   {
     if (!connected)
     {
@@ -1317,10 +1317,32 @@ void fct_goToSleep()
   delay(500);
 
   uint64_t GPIO_reason = esp_sleep_get_gpio_wakeup_status();
-  
+
   if (GPIO_reason == 0)
   {
+    Serial.printf("Reset was not caused by gpio.");
+    esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW); // biztos ami biztos
     esp_deep_sleep_start();
+  }
+  else
+  {
+    Serial.print("GPIO that triggered the wake up: GPIO ");
+    Serial.println((log(GPIO_reason)) / log(2), 0);
+  }
+
+  esp_sleep_wakeup_cause_t cause;
+
+  switch (cause = esp_sleep_get_wakeup_cause())
+  {
+  case ESP_SLEEP_WAKEUP_UNDEFINED:
+    Serial.printf("Reset was not caused by exit from deep sleep.");
+    esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW); // biztos ami biztos
+    esp_deep_sleep_start();
+    break;
+  default:
+    esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW); // biztos ami biztos
+    Serial.printf("Wakeup caused by: %d\n", cause);
+    break;
   }
 }
 
@@ -1334,15 +1356,17 @@ void setup()
   {
     pinMode(outputGPIOs[i], OUTPUT);
   }
-  Serial.begin(9600); // a serial.print-eket kikommenteltem, ez csak azért kell hogy íráskor ne kelljen a reset + boot gombokat nyomogatni
-  EEPROM.begin(memoria_meret);
-  delay(10);
-  readeepromparameter();
+  pinMode(WAKEUP_PIN, INPUT_PULLUP);
   ledcSetup(ledChannel, freq, resolution);
-  // attach the channel to the GPIO to be controlled
   ledcAttachPin(LED_eeprom, ledChannel);
   allrelayoff();
   digitalWrite(relayOutlet, HIGH); // hosszabító lekapcsolása BOOT utan
+  esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);
+  Serial.begin(9600); // a serial.print-eket kikommenteltem, ez csak azért kell hogy íráskor ne kelljen a reset + boot gombokat nyomogatni
+  delay(10);
+  fct_goToSleep;
+  EEPROM.begin(memoria_meret);
+  readeepromparameter();
   initSPIFFS();
   initWebSocket();
   watchDOG.start();
@@ -1355,7 +1379,6 @@ void setup()
   button.attachLongPressStop(LongPressStop);                        // tesztmod aktivalasa
   button.attachClick(click);                                        // reset watchdog
   xTaskCreatePinnedToCore(loop2, "loop2", 10000, NULL, 1, NULL, 1); // loop 2 10000-nél lehet kevesebb is, én nem kísérleteztem, gomb kezelés, led kezelés, otp update...
-  esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);
   // Load values saved in SPIFFS
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
@@ -1425,7 +1448,6 @@ void setup()
   // ElegantOTA callbacks
   WebSerial.begin(&server);
   WebSerial.msgCallback(recvMsg);
-  fct_goToSleep();
   lcd.init(); // lcd bekapcsolasa, ketszer kell beirni, mivel lassu az lcd modul, hibak lehetnek a kijelzessel he nem igy tettem
   lcd.init();
   lcd.createChar(0, delta);
@@ -1512,7 +1534,9 @@ void loop()
       if (adat > 0)
       {
         fct_WatchdogReset();
-      } else if (adat == 0) {
+      }
+      else if (adat == 0)
+      {
         forSleepTime = timetosleep * 2;
       }
       atlagolas();
