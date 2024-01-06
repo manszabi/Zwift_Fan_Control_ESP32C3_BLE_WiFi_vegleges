@@ -1068,15 +1068,12 @@ void doubleClick() {
 }  // doubleClick
 
 void LongPressStop() {
-  if (teszteles == 0) {
-    teszteles = 1;
-  } else if (teszteles == 1) {
-    teszteles = 0;
-  }
-  EEPROM.put(90, teszteles);
-  eeprom_commit();
-  ledPwmBlinking(3);
-  ESP.restart();
+ digitalWrite(LED_wifi, LOW);
+    allrelayoff();  // relek kikapcsolása
+    digitalWrite(relayOutlet, HIGH);
+    digitalWrite(relayEN, LOW);
+    ledPwmBlinking(3);
+    esp_deep_sleep_start();
 }  // longPress stop
 
 void fct_OnStateLed() {
