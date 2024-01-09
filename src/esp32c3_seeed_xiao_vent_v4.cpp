@@ -508,8 +508,11 @@ void recvMsg(uint8_t *adat, size_t len) {
     hutesUzemmod = 0;
     kalibralas = 0;
     EEPROM.put(150, kalibralas);
+    eeprom_commit();
     EEPROM.put(140, hutesUzemmod);
+    eeprom_commit();
     EEPROM.put(90, teszteles);
+    eeprom_commit();
     EEPROM.put(160, bootCount);//biztos ami biztos
     eeprom_commit();
     ledPwmBlinking(3);
@@ -524,7 +527,6 @@ void recvMsg(uint8_t *adat, size_t len) {
   }
   if (d == "reset") {
     reset = 1;
-    readeepromparameter();
     eeprom_check();
     eeprom_valid();
     reset = 0;
@@ -557,8 +559,11 @@ void recvMsg(uint8_t *adat, size_t len) {
     kalibralas = 0;
     teszteles = 0;
     EEPROM.put(90, teszteles);
+    eeprom_commit();
     EEPROM.put(150, kalibralas);
+    eeprom_commit();
     EEPROM.put(140, hutesUzemmod);
+    eeprom_commit();
     EEPROM.put(160, bootCount);//biztos ami biztos
     eeprom_commit();
     ledPwmBlinking(3);
@@ -576,8 +581,11 @@ void recvMsg(uint8_t *adat, size_t len) {
     hutesUzemmod = 0;
     teszteles = 0;
     EEPROM.put(90, teszteles);
+    eeprom_commit();
     EEPROM.put(140, hutesUzemmod);
+    eeprom_commit();
     EEPROM.put(150, kalibralas);
+    eeprom_commit();
     EEPROM.put(160, bootCount); //biztos ami biztos
     eeprom_commit();
     ledPwmBlinking(3);
@@ -603,9 +611,13 @@ void recvMsg(uint8_t *adat, size_t len) {
       erzekelo = 111;
       alapteljesitmeny = 100;
       EEPROM.put(10, ZONE_1);
+      eeprom_commit();
       EEPROM.put(20, ZONE_2);
+      eeprom_commit();
       EEPROM.put(30, sprintzona);
+      eeprom_commit();
       EEPROM.put(100, alapteljesitmeny);
+      eeprom_commit();
       EEPROM.put(120, erzekelo);
       eeprom_commit();
       ledPwmBlinking(3);
@@ -621,9 +633,13 @@ void recvMsg(uint8_t *adat, size_t len) {
       erzekelo = 222;
       alapteljesitmeny = 20;
       EEPROM.put(10, ZONE_1);
+      eeprom_commit();
       EEPROM.put(20, ZONE_2);
+      eeprom_commit();
       EEPROM.put(30, sprintzona);
+      eeprom_commit();
       EEPROM.put(100, alapteljesitmeny);
+      eeprom_commit();
       EEPROM.put(120, erzekelo);
       eeprom_commit();
       ledPwmBlinking(3);
@@ -982,7 +998,7 @@ void eeprom_commit() {
 
 void checkAndReset(int value, uint32_t defaultValue, uint16_t address, const char *name) {
   uint32_t upperLimit;
-  if (reset == 1 || teszteles < 0 || teszteles > 1 || erzekelo == 0 || ZONE_1 == 0 || ZONE_2 == 0 || kesleltetes0 == 0 || sprintzona == 0 || kesleltetes1 == 0 || kesleltetes2 == 0 || kesleltetes3 == 0 || kesleltetessprint == 0 || kesleltetesend == 0 || alapteljesitmeny == 0 || reboot > 1 || hutesUzemmod > 1 || reboot < 0 || hutesUzemmod < 0 || kalibralas < 0 || kalibralas > 1 || elozoBootcount < 0)  // szuroprobaszeruen megnez par erteket
+  if (reset == 1)  // szuroprobaszeruen megnez par erteket
   {
     value = defaultValue;
     EEPROM.put(address, value);
@@ -1200,7 +1216,9 @@ void fct_goToSleep() {
       teszteles = 0;
       hutesUzemmod = 0;
       EEPROM.put(90, teszteles);
+      eeprom_commit();
       EEPROM.put(150, kalibralas);
+      eeprom_commit();
       EEPROM.put(140, hutesUzemmod);
       eeprom_commit();
     }
@@ -1222,7 +1240,8 @@ void fct_goToSleep() {
         Serial.printf("Wakeup caused by: %d\n", cause);
         break;
     }
-  } else if (reboot == 1) {
+  }
+  if (reboot == 1) {
     reboot = 0;
     EEPROM.put(130, reboot);
     eeprom_commit();
@@ -1233,7 +1252,6 @@ void rebootEsp() {
   reboot = 1;
   EEPROM.put(130, reboot);
   eeprom_commit();
-
   delay(100);
   ESP.restart();
 }
@@ -1252,15 +1270,14 @@ void setup() {
   digitalWrite(relayOutlet, HIGH);  // hosszabító lekapcsolása BOOT utan
   esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);
   Serial.begin(115200);  // a serial.print-eket kikommenteltem, ez csak azért kell hogy íráskor ne kelljen a reset + boot gombokat nyomogatni
-  delay(10);
+  delay(100);
   ++bootCount;
   Serial.println("Boot number: " + String(bootCount));
   EEPROM.begin(memoria_meret);
-  delay(10);
+  delay(100);
   eeprom_check();
-  eeprom_valid();
   readeepromparameter();
-  delay(10);
+  delay(100);
   fct_goToSleep();
   EEPROM.put(160, bootCount);
   eeprom_commit();
