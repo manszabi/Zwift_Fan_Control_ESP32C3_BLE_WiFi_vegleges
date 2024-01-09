@@ -507,8 +507,8 @@ void recvMsg(uint8_t *adat, size_t len) {
     teszteles = 1;
     hutesUzemmod = 0;
     kalibralas = 0;
-    EEPROM.put(150, 0);
-    EEPROM.put(140, 0);
+    EEPROM.put(150, kalibralas);
+    EEPROM.put(140, hutesUzemmod);
     EEPROM.put(90, teszteles);
     EEPROM.put(160, bootCount);//biztos ami biztos
     eeprom_commit();
@@ -556,8 +556,8 @@ void recvMsg(uint8_t *adat, size_t len) {
     hutesUzemmod = 1;
     kalibralas = 0;
     teszteles = 0;
-    EEPROM.put(90, 0);
-    EEPROM.put(150, 0);
+    EEPROM.put(90, teszteles);
+    EEPROM.put(150, kalibralas);
     EEPROM.put(140, hutesUzemmod);
     EEPROM.put(160, bootCount);//biztos ami biztos
     eeprom_commit();
@@ -575,8 +575,8 @@ void recvMsg(uint8_t *adat, size_t len) {
     kalibralas = 1;
     hutesUzemmod = 0;
     teszteles = 0;
-    EEPROM.put(90, 0);
-    EEPROM.put(140, 0);
+    EEPROM.put(90, teszteles);
+    EEPROM.put(140, hutesUzemmod);
     EEPROM.put(150, kalibralas);
     EEPROM.put(160, bootCount); //biztos ami biztos
     eeprom_commit();
@@ -601,10 +601,11 @@ void recvMsg(uint8_t *adat, size_t len) {
       ZONE_2 = mymaxheartrate * 0.85;
       sprintzona = mymaxheartrate * 0.96;
       erzekelo = 111;
+      alapteljesitmeny = 100;
       EEPROM.put(10, ZONE_1);
       EEPROM.put(20, ZONE_2);
       EEPROM.put(30, sprintzona);
-      EEPROM.put(100, 100);
+      EEPROM.put(100, alapteljesitmeny);
       EEPROM.put(120, erzekelo);
       eeprom_commit();
       ledPwmBlinking(3);
@@ -618,10 +619,11 @@ void recvMsg(uint8_t *adat, size_t len) {
       ZONE_2 = myftpzone * 0.90;
       sprintzona = myftpzone * 1.18;
       erzekelo = 222;
+      alapteljesitmeny = 20;
       EEPROM.put(10, ZONE_1);
       EEPROM.put(20, ZONE_2);
       EEPROM.put(30, sprintzona);
-      EEPROM.put(100, 20);
+      EEPROM.put(100, alapteljesitmeny);
       EEPROM.put(120, erzekelo);
       eeprom_commit();
       ledPwmBlinking(3);
@@ -1005,7 +1007,7 @@ void eeprom_valid() {
   checkAndReset(reboot, 0, 130, "reboot");
   checkAndReset(hutesUzemmod, 0, 140, "hutesUzemmod");
   checkAndReset(kalibralas, 0, 150, "kalibralas");
-  checkAndReset(elozoBootcount, bootCount, 160, "elozoBootcount");
+  checkAndReset(elozoBootcount, 0, 160, "elozoBootcount");
 }
 
 void readeepromparameter() {
@@ -1093,7 +1095,7 @@ void fct_Watchdog() {
     digitalWrite(relayOutlet, HIGH);
     digitalWrite(relayEN, LOW);
     ledPwmBlinking(3);
-    EEPROM.end();
+  
     esp_deep_sleep_start();
   }
 }
@@ -1191,12 +1193,7 @@ void fct_counterFromBoot() {
 
 void fct_goToSleep() {
   delay(500);
-  if (reboot > 1 || reboot < 0)  // ha gond lenne
-  {
-    Serial.println("REBOOT PARAMETER HIBA!");
-    reboot = 0;
-  }
-  if ((kalibralas == 1 || teszteles == 1 || hutesUzemmod ==1) && bootCount > 1) {
+  if (kalibralas == 1 || teszteles == 1 || hutesUzemmod ==1) {
     uint8_t kulonbseg = bootCount - elozoBootcount;
     if (kulonbseg = 2) {
       kalibralas = 0;
@@ -1216,7 +1213,7 @@ void fct_goToSleep() {
     switch (cause) {
       case ESP_SLEEP_WAKEUP_UNDEFINED:
         Serial.println("Reset was not caused by exit from deep sleep.");
-        EEPROM.end();
+      
         esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);  // biztos ami biztos
         esp_deep_sleep_start();
         break;
@@ -1227,16 +1224,16 @@ void fct_goToSleep() {
     }
   } else if (reboot == 1) {
     reboot = 0;
-    EEPROM.put(130, 0);
+    EEPROM.put(130, reboot);
     eeprom_commit();
   }
 }
 
 void rebootEsp() {
   reboot = 1;
-  EEPROM.put(130, 1);
+  EEPROM.put(130, reboot);
   eeprom_commit();
-  EEPROM.end();
+
   delay(100);
   ESP.restart();
 }
