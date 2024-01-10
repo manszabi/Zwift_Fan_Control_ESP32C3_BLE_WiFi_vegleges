@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 #include <BLEServer.h>
 #include <BLEDevice.h>
@@ -68,6 +67,10 @@ void fct_counterFromBoot();
 void loop2(void *pvParameter);
 void ledPwmBlinking(int blinkNumber);
 void rebootEsp();
+void onOTAStart();
+void onOTAProgress(size_t current, size_t final);
+void onOTAEnd(bool success);
+void print_wakeup_reason();
 
 TickTwo watchDOG(fct_Watchdog, 1000, 0, MILLIS);
 TickTwo counterFromBoot(fct_counterFromBoot, 1000, 0, MILLIS);
@@ -135,7 +138,7 @@ char help1[] = "Parancsok: help, reset, wifireset, lcdon, lcdoff, run, teszt, re
 char help2[] = ",kesleltetesnulla(masodperc), kesleltetesegy(masodperc), kesleltetesketto(masodperc), kesleltetesharom(masodperc), kesleltetessprint(masodperc), kesleltetesend(masodperc), kesleltetesek?, hutesuzemmodbe, hutesuzemmodki, kalibralasbe, kalibralaski ";
 String inString = "";
 
-byte delta[8] = {  // LCD-hez
+byte delta[8] = {  // LCD-hez, delta jel
   0b00100,
   0b00100,
   0b01010,
@@ -193,8 +196,6 @@ const uint8_t resolution = 8;
 #define WAKEUP_PIN 3  // felebreszteshez
 OneButton button(WAKEUP_PIN, true);
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);  // i2c cim 0x27, 2 soros soronkent 16 karakteres kijelzo
-
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
@@ -210,9 +211,6 @@ const char *PARAM_INPUT_3 = "ip";
 const char *PARAM_INPUT_4 = "gateway";
 
 static boolean wifiOk = false;
-
-// const char* ssid = "SSID";                  // Change this to your WiFi SSID
-// const char* password = "PASSWORD";  // Change this to your WiFi password
 
 // Variables to save values from HTML form
 String ssid;
@@ -255,6 +253,12 @@ void notifyClients(String state) {
   ws.textAll(state);
 }
 
+void onOTAStart() {
+  // Log when OTA has started
+  Serial.println("OTA update started!");
+  // <Add your own code here>
+}
+
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo *)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
@@ -295,8 +299,17 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len) {
   switch (type) {
+    case WS_EVT_CONNECT:
+      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      break;
     case WS_EVT_DATA:
       handleWebSocketMessage(arg, data, len);
+      break;
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
       break;
   }
 }
@@ -308,15 +321,40 @@ void initWebSocket() {
 
 // Initialize SPIFFS
 void initSPIFFS() {
-  SPIFFS.begin(true);
+  if (!SPIFFS.begin(true)) {
+    Serial.println("An error has occurred while mounting SPIFFS");
+  }
+  Serial.println("SPIFFS mounted successfully");
+}
+
+void onOTAProgress(size_t current, size_t final) {
+  // Log every 1 second
+  if (millis() - ota_progress_millis > 1000) {
+    ota_progress_millis = millis();
+    Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
+  }
+}
+
+void onOTAEnd(bool success) {
+  // Log when OTA has finished
+  if (success) {
+    Serial.println("OTA update finished successfully!");
+  } else {
+    Serial.println("There was an error during OTA update!");
+  }
+  // <Add your own code here>
 }
 
 // Read File from SPIFFS
 String readFile(fs::FS &fs, const char *path) {
+  Serial.printf("Reading file: %s\r\n", path);
+
   File file = fs.open(path);
   if (!file || file.isDirectory()) {
+    Serial.println("- failed to open file for reading");
     return String();
   }
+
   String fileContent;
   while (file.available()) {
     fileContent = file.readStringUntil('\n');
@@ -327,13 +365,24 @@ String readFile(fs::FS &fs, const char *path) {
 
 // Write file to SPIFFS
 void writeFile(fs::FS &fs, const char *path, const char *message) {
+  Serial.printf("Writing file: %s\r\n", path);
+
   File file = fs.open(path, FILE_WRITE);
-  file.print(message);
+  if (!file) {
+    Serial.println("- failed to open file for writing");
+    return;
+  }
+  if (file.print(message)) {
+    Serial.println("- file written");
+  } else {
+    Serial.println("- write failed");
+  }
 }
 
 // Initialize WiFi
 bool initWiFi() {
   if (ssid == "" || ip == "") {
+    Serial.println("Undefined SSID or IP address.");
     return false;
   }
 
@@ -341,10 +390,13 @@ bool initWiFi() {
   localIP.fromString(ip.c_str());
   localGateway.fromString(gateway.c_str());
 
+
   if (!WiFi.config(localIP, localGateway, subnet)) {
+    Serial.println("STA Failed to configure");
     return false;
   }
   WiFi.begin(ssid.c_str(), pass.c_str());
+  Serial.println("Connecting to WiFi...");
 
   unsigned long currentMillis = millis();
   previousMillis = currentMillis;
@@ -352,9 +404,12 @@ bool initWiFi() {
   while (WiFi.status() != WL_CONNECTED) {
     currentMillis = millis();
     if (currentMillis - previousMillis >= interval) {
+      Serial.println("Failed to connect.");
       return false;
     }
   }
+
+  Serial.println(WiFi.localIP());
   return true;
 }
 
@@ -362,9 +417,9 @@ bool initWiFi() {
 String processor(const String &var) {
   if (var == "STATE") {
     if (digitalRead(ledPin)) {
-      ledState = "OFF";
-    } else {
       ledState = "ON";
+    } else {
+      ledState = "OFF";
     }
     return ledState;
   }
@@ -513,8 +568,6 @@ void recvMsg(uint8_t *adat, size_t len) {
     eeprom_commit();
     EEPROM.put(90, teszteles);
     eeprom_commit();
-    EEPROM.put(160, bootCount);//biztos ami biztos
-    eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -529,6 +582,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     reset = 1;
     eeprom_check();
     eeprom_valid();
+    readeepromparameter();
     reset = 0;
     ledPwmBlinking(3);
     rebootEsp();
@@ -547,11 +601,11 @@ void recvMsg(uint8_t *adat, size_t len) {
     rebootEsp();
   }
   if (d == "lcdon") {
-    lcd.backlight();
+    //kijelzo kezeles
     WebSerial.println("LCD ON!");
   }
   if (d == "lcdoff") {
-    lcd.noBacklight();
+    //kijelzo kezeles
     WebSerial.println("LCD OFF!");
   }
   if (d == "hutesuzemmodbe") {
@@ -563,8 +617,6 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(150, kalibralas);
     eeprom_commit();
     EEPROM.put(140, hutesUzemmod);
-    eeprom_commit();
-    EEPROM.put(160, bootCount);//biztos ami biztos
     eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
@@ -585,8 +637,6 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(140, hutesUzemmod);
     eeprom_commit();
     EEPROM.put(150, kalibralas);
-    eeprom_commit();
-    EEPROM.put(160, bootCount); //biztos ami biztos
     eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
@@ -867,40 +917,10 @@ void kiiras() {
     if (erzekelo == 222) {
       kiir("Atlag teljesitmeny: ", teljesitmeny);
       kiir(" Pillanatnyi teljesitmeny: ", adat);
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("AtlagPWR:");
-      lcd.setCursor(10, 0);
-      lcd.print(teljesitmeny, DEC);
-      lcd.setCursor(14, 0);
-      lcd.write(byte(0));
-      lcd.setCursor(15, 0);
-      lcd.print("W");
-      lcd.setCursor(0, 1);
-      lcd.print("Power:");
-      lcd.setCursor(8, 1);
-      lcd.print(adat, DEC);
-      lcd.setCursor(12, 1);
-      lcd.print("Watt");
     }
     if (erzekelo == 111) {
       kiir("Atlag pulzus: ", teljesitmeny);
       kiir(" Pillanatnyi pulzus: ", adat);
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("AtlagHR:");
-      lcd.setCursor(9, 0);
-      lcd.print(teljesitmeny, DEC);
-      lcd.setCursor(13, 0);
-      lcd.write(byte(0));
-      lcd.setCursor(13, 0);
-      lcd.print("BPM");
-      lcd.setCursor(0, 1);
-      lcd.print("Heart:");
-      lcd.setCursor(8, 1);
-      lcd.print(adat, DEC);
-      lcd.setCursor(12, 1);
-      lcd.print("BPM");
     }
   }
 }
@@ -915,34 +935,41 @@ class MyClientCallback : public BLEClientCallbacks {
   }
   void onDisconnect(BLEClient *pclient) {
     alapparameter();
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("BLE (1.)");
-    lcd.setCursor(0, 1);
-    lcd.print("Lecsatlakozott!");
     allrelayoff();
   }
 };
 
 bool connectToServer(BLEUUID serviceUUID, BLEUUID charUUID) {
+  Serial.print("Forming a connection to ");
+  Serial.println(myDevice->getAddress().toString().c_str());
   BLEClient *pClient = BLEDevice::createClient();
+  Serial.println(" - Created client");
   pClient->setClientCallbacks(new MyClientCallback());
   pClient->connect(myDevice);
+  Serial.println(" - Connected to server");
   BLERemoteService *pRemoteService = pClient->getService(serviceUUID);
 
   if (pRemoteService == nullptr) {
+    Serial.print("Failed to find our service UUID: ");
+    Serial.println(serviceUUID.toString().c_str());
     pClient->disconnect();
     return false;
   }
+  Serial.println(" - Found our service");
+
   pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
 
   if (pRemoteCharacteristic == nullptr) {
+    Serial.print("Failed to find our characteristic UUID: ");
+    Serial.println(charUUID.toString().c_str());
     pClient->disconnect();
     return false;
   }
-
+  Serial.println(" - Found our characteristic");
   if (pRemoteCharacteristic->canRead()) {
     std::string value = pRemoteCharacteristic->readValue();
+    Serial.print("The characteristic value was: ");
+    Serial.println(value.c_str());
   }
 
   if (pRemoteCharacteristic->canNotify()) {
@@ -955,6 +982,8 @@ bool connectToServer(BLEUUID serviceUUID, BLEUUID charUUID) {
 
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice advertisedDevice) {
+    Serial.print("BLE Advertised Device found: ");
+    Serial.println(advertisedDevice.toString().c_str());
     bool isHeartService = erzekelo == 111 && advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService(SERVICE1_UUID);
     bool isPowerService = erzekelo == 222 && advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService(SERVICE2_UUID);
     if (isHeartService || isPowerService) {
@@ -979,9 +1008,11 @@ class MyServerCallbacks : public BLEServerCallbacks {
 
 void eeprom_check() {
   if (EEPROM.read(0) != 0x55 || reset == 1) {
-    if (reset == 0) {
+    if (reset == 0) {  //mivel ha nem en kezdemenyztem akkor gond van
       ledPwmBlinking(4);
     }
+    Serial.println("EEPROM is not formatted!");
+    Serial.println("Formatting EEPROM...");
     for (uint8_t i = 0; i < memoria_meret; i++) {
       EEPROM.write(i, 0);
       EEPROM.commit();
@@ -989,20 +1020,29 @@ void eeprom_check() {
     EEPROM.write(0, 0x55);
     EEPROM.write(1, 0xAA);
     EEPROM.commit();
+    Serial.println("Done!");
+  } else {
+    Serial.println("EEPROM is formatted!");
   }
 }
 
 void eeprom_commit() {
-  EEPROM.commit();
+  if (EEPROM.commit()) {
+    Serial.println("EEPROM successfully committed");
+  } else {
+    Serial.println("ERROR! EEPROM commit failed");
+  }
 }
 
 void checkAndReset(int value, uint32_t defaultValue, uint16_t address, const char *name) {
   uint32_t upperLimit;
-  if (reset == 1)  // szuroprobaszeruen megnez par erteket
+  if (reset == 1 || ZONE_2 == 0 || erzekelo == 0 || kesleltetes3 == 0)  // szuroprobaszeruen megnez par erteket eeprom.check utan
   {
     value = defaultValue;
     EEPROM.put(address, value);
     eeprom_commit();
+    Serial.print(name);
+    Serial.println(" alapertekre irva a memoriaban!");
   }
   szamlalo = intervallum;
 }
@@ -1023,7 +1063,6 @@ void eeprom_valid() {
   checkAndReset(reboot, 0, 130, "reboot");
   checkAndReset(hutesUzemmod, 0, 140, "hutesUzemmod");
   checkAndReset(kalibralas, 0, 150, "kalibralas");
-  checkAndReset(elozoBootcount, 0, 160, "elozoBootcount");
 }
 
 void readeepromparameter() {
@@ -1042,7 +1081,6 @@ void readeepromparameter() {
   EEPROM.get(130, reboot);
   EEPROM.get(140, hutesUzemmod);
   EEPROM.get(150, kalibralas);
-  EEPROM.get(160, elozoBootcount);
 }
 
 void blekliens() {
@@ -1077,6 +1115,7 @@ void bleszerver(BLEUUID serviceUUID, BLEUUID charUUID) {
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);
   BLEDevice::startAdvertising();
+  Serial.println("Waiting a client connection to notify...");
 }
 
 void fct_ledUpdate() {
@@ -1110,14 +1149,45 @@ void fct_Watchdog() {
     allrelayoff();  // relek kikapcsolása
     digitalWrite(relayOutlet, HIGH);
     digitalWrite(relayEN, LOW);
+    Serial.println("Minden rele ki!(watchdog)");
     ledPwmBlinking(3);
-  
+    Serial.println("Going to sleep now");
+    delay(500);
     esp_deep_sleep_start();
+    Serial.println("This will never be printed");
   }
 }
 
 void fct_WatchdogReset() {
   watchdogCounter = watchdogMinCounter;
+  Serial.println("WatchdogReset!");
+}
+
+void print_wakeup_reason() {
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch (wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_EXT0:
+      Serial.println("Wakeup caused by external signal using RTC_IO");
+      break;
+    case ESP_SLEEP_WAKEUP_EXT1:
+      Serial.println("Wakeup caused by external signal using RTC_CNTL");
+      break;
+    case ESP_SLEEP_WAKEUP_TIMER:
+      Serial.println("Wakeup caused by timer");
+      break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD:
+      Serial.println("Wakeup caused by touchpad");
+      break;
+    case ESP_SLEEP_WAKEUP_ULP:
+      Serial.println("Wakeup caused by ULP program");
+      break;
+    default:
+      Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
+      break;
+  }
 }
 
 void click() {
@@ -1125,10 +1195,17 @@ void click() {
   fromBootCounter = 0;
   stopServer = false;
   counterFromBoot.start();
+  Serial.begin(115200);
+  ElegantOTA.begin(&server);
+  WebSerial.begin(&server);
+  WebSerial.msgCallback(recvMsg);
+  server.begin();
   ledPwmBlinking(1);
 }
 
 void doubleClick() {
+  Serial.println("Minden WiFi parameter resetelve! Reboot.");
+  delay(500);
   wifi_config_t current_conf;
   esp_wifi_get_config((wifi_interface_t)ESP_IF_WIFI_STA, &current_conf);
   memset(current_conf.sta.ssid, 0, sizeof(current_conf.sta.ssid));
@@ -1189,16 +1266,14 @@ void fct_counterFromBoot() {
   if (fromBootCounter == 10) {
     digitalWrite(relayOutlet, LOW);  // hosszabító bekapcsolása - edzogorgo felkapcsolasa
   }
-  if (fromBootCounter == 60) {
+  if (fromBootCounter == 90) {
     if (!connected) {
       digitalWrite(relayOutlet, HIGH);  // hosszabító lekapcsolása ha nincs bluetooth csatlakozas
     }
   }
-  if (fromBootCounter == 300 && hutesUzemmod == 0)  // lcd webserver leállítása
+  if (fromBootCounter == 300 && hutesUzemmod == 0)  // webserver leállítása
   {
     Serial.end();
-    lcd.noBacklight();
-    lcd.noDisplay();
     server.end();
     stopServer = true;
     counterFromBoot.stop();
@@ -1209,20 +1284,6 @@ void fct_counterFromBoot() {
 
 void fct_goToSleep() {
   delay(500);
-  if (kalibralas == 1 || teszteles == 1 || hutesUzemmod ==1) {
-    uint8_t kulonbseg = bootCount - elozoBootcount;
-    if (kulonbseg = 2) {
-      kalibralas = 0;
-      teszteles = 0;
-      hutesUzemmod = 0;
-      EEPROM.put(90, teszteles);
-      eeprom_commit();
-      EEPROM.put(150, kalibralas);
-      eeprom_commit();
-      EEPROM.put(140, hutesUzemmod);
-      eeprom_commit();
-    }
-  }
   if (reboot == 0) {
     esp_sleep_wakeup_cause_t cause;
     cause = esp_sleep_get_wakeup_cause();
@@ -1231,7 +1292,7 @@ void fct_goToSleep() {
     switch (cause) {
       case ESP_SLEEP_WAKEUP_UNDEFINED:
         Serial.println("Reset was not caused by exit from deep sleep.");
-      
+
         esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);  // biztos ami biztos
         esp_deep_sleep_start();
         break;
@@ -1273,17 +1334,19 @@ void setup() {
   delay(100);
   ++bootCount;
   Serial.println("Boot number: " + String(bootCount));
+  // Print the wakeup reason for ESP32
+  print_wakeup_reason();
   EEPROM.begin(memoria_meret);
   delay(100);
   eeprom_check();
   readeepromparameter();
+  eeprom_valid();
   delay(100);
   fct_goToSleep();
-  EEPROM.put(160, bootCount);
-  eeprom_commit();
   initSPIFFS();
   initWebSocket();
   watchDOG.start();
+  Serial.println("Start watchdog counter!");
   ledUpdate.start();
   counterFromBoot.start();
   OnStateLedBleConnected.stop();
@@ -1298,6 +1361,10 @@ void setup() {
   pass = readFile(SPIFFS, passPath);
   ip = readFile(SPIFFS, ipPath);
   gateway = readFile(SPIFFS, gatewayPath);
+  Serial.println(ssid);
+  Serial.println(pass);
+  Serial.println(ip);
+  Serial.println(gateway);
   if (initWiFi()) {
     wifiOk = true;
     // Route for root / web page
@@ -1309,9 +1376,13 @@ void setup() {
   } else {
     wifiOk = false;
     // Connect to Wi-Fi network with SSID and password
+    Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
     WiFi.softAP("ESP-WIFI-MANAGER", NULL);
     IPAddress IP = WiFi.softAPIP();
+    Serial.print("AP IP address: ");
+    Serial.println(IP);
+    
     // Web Server Root URL
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       request->send(SPIFFS, "/wifimanager.html", "text/html");
@@ -1327,24 +1398,32 @@ void setup() {
           // HTTP POST ssid value
           if (p->name() == PARAM_INPUT_1) {
             ssid = p->value().c_str();
+            Serial.print("SSID set to: ");
+            Serial.println(ssid);
             // Write file to save value
             writeFile(SPIFFS, ssidPath, ssid.c_str());
           }
           // HTTP POST pass value
           if (p->name() == PARAM_INPUT_2) {
             pass = p->value().c_str();
+            Serial.print("Password set to: ");
+            Serial.println(pass);
             // Write file to save value
             writeFile(SPIFFS, passPath, pass.c_str());
           }
           // HTTP POST ip value
           if (p->name() == PARAM_INPUT_3) {
             ip = p->value().c_str();
+            Serial.print("IP Address set to: ");
+            Serial.println(ip);
             // Write file to save value
             writeFile(SPIFFS, ipPath, ip.c_str());
           }
           // HTTP POST gateway value
           if (p->name() == PARAM_INPUT_4) {
             gateway = p->value().c_str();
+            Serial.print("Gateway set to: ");
+            Serial.println(gateway);
             // Write file to save value
             writeFile(SPIFFS, gatewayPath, gateway.c_str());
           }
@@ -1359,29 +1438,25 @@ void setup() {
   server.serveStatic("/", SPIFFS, "/");
   ElegantOTA.begin(&server);  // Start ElegantOTA
   // ElegantOTA callbacks
+  ElegantOTA.onStart(onOTAStart);
+  ElegantOTA.onProgress(onOTAProgress);
+  ElegantOTA.onEnd(onOTAEnd);
   WebSerial.begin(&server);
   WebSerial.msgCallback(recvMsg);
-  lcd.init();  // lcd bekapcsolasa, ketszer kell beirni, mivel lassu az lcd modul, hibak lehetnek a kijelzessel he nem igy tettem
-  lcd.init();
-  lcd.createChar(0, delta);
-  lcd.backlight();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Esp32 BLE");
-  lcd.setCursor(0, 1);
-  lcd.print("kliens inditasa!");
+  server.begin();
+  Serial.println("Webserial and ElegantOTA started!");
+  Serial.println("HTTP server started:" + WiFi.localIP().toString());
   digitalWrite(relayEN, HIGH);  // relek engedelyezese
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("BLE eszkoz");
-  lcd.setCursor(0, 1);
-  lcd.print("kereses...");
+  Serial.print("Hutesuzemmod aktív?: ");
+  Serial.println(hutesUzemmod);
   if (hutesUzemmod < 0 || hutesUzemmod > 1 || teszteles < 0 || teszteles > 1 || kalibralas < 0 || kalibralas > 1) {
     kalibralas = 0;
     hutesUzemmod = 0;
     teszteles = 0;
-    Serial.println("hutesUzemmod/teszteles parameter hiba!");
+    Serial.println("hutesUzemmod/teszteles/kalibralas parameter hiba!");
   }
+  Serial.print("Tesztelés aktív?: ");
+  Serial.println(teszteles);
   if (teszteles == 0 && hutesUzemmod == 0 && kalibralas == 0)  // teszteleshez
   {
     blekliens();
@@ -1419,22 +1494,17 @@ void loop() {
         }
         if (doConnect == true) {
           if (connectToServer(serviceerzekeloUUID, charerzekeloUUID)) {
+            Serial.println("Csatlakozva a BLE szerverhez!");
             WebSerial.println("Csatlakozva a BLE szerverhez!");
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("BLE csatlakozva!");
           } else {
+            Serial.println("Nem lehet csatlakozni a BLE szerverhez!");
             WebSerial.println("Nem lehet csatlakozni a BLE szerverhez!");
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("Hibas");
-            lcd.setCursor(0, 1);
-            lcd.print("BLE eszkoz.");
           }
           doConnect = false;
         }
         if (connected) {
           if (notification == false) {
+            Serial.println("Adatok fogadasanak bekapcsolasa!");
             WebSerial.println("Adatok fogadasanak bekapcsolasa!");
             const uint8_t onPacket[] = { 0x01, 0x0 };
             pRemoteCharacteristic->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)onPacket, 2, true);
@@ -1450,21 +1520,20 @@ void loop() {
           ventillatorvezerles();
           kiiras();
         } else if (doScan) {
+          Serial.println("Lecsatlakozott.");
+          Serial.println("Minden rele ki! Lecsatlakozas utan. ");
           alapparameter();
           BLEDevice::getScan()->start(0);  // ha lecsatlakozott ujra keresd folyamatosan
-          lcd.clear();
-          lcd.setCursor(0, 0);
-          lcd.print("BLE (2.)");
-          lcd.setCursor(0, 1);
-          lcd.print("Lecsatlakozott");
           allrelayoff();
         }
       } else if (hutesUzemmod == 1) {
+        Serial.println("Hutes-uzemmod aktiv.");
         WebSerial.println("Vigyazz! Hutesuzzemod aktiv! (webserial: hutesuzemmodki)");
         fct_WatchdogReset();
       }
     }
   } else if (kalibralas == 1) {
+    Serial.println("Kalibralas-uzemmod aktiv.");
     WebSerial.println("Vigyazz! Kalibralas aktiv! (webserial: kalibralaski)");
   }
 }
