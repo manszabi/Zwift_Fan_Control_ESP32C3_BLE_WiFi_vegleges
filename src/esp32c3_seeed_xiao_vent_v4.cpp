@@ -901,7 +901,7 @@ void relek() {
           break;
         case 4:
           digitalWrite(relayGPIOs[2], LOW);
-          periodrele = kesleltetes4;
+          periodrele = kesleltetessprint;
           break;
         default:
           break;
