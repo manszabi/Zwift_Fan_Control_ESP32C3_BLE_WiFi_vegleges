@@ -71,6 +71,8 @@ void onOTAStart();
 void onOTAProgress(size_t current, size_t final);
 void onOTAEnd(bool success);
 void print_wakeup_reason();
+void wifiOn();
+void wifiInterface();
 
 TickTwo watchDOG(fct_Watchdog, 1000, 0, MILLIS);
 TickTwo counterFromBoot(fct_counterFromBoot, 1000, 0, MILLIS);
@@ -1196,10 +1198,8 @@ void click() {
   stopServer = false;
   counterFromBoot.start();
   Serial.begin(115200);
-  ElegantOTA.begin(&server);
-  WebSerial.begin(&server);
-  WebSerial.msgCallback(recvMsg);
-  server.begin();
+  wifiOn();
+  wifiInterface();
   ledPwmBlinking(1);
 }
 
@@ -1275,6 +1275,8 @@ void fct_counterFromBoot() {
   {
     Serial.end();
     server.end();
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
     stopServer = true;
     counterFromBoot.stop();
   } else if (fromBootCounter == 300 && hutesUzemmod == 1) {
@@ -1316,46 +1318,10 @@ void rebootEsp() {
   delay(100);
   ESP.restart();
 }
-void setup() {
-  pinMode(LED_wifi, OUTPUT);     // gpio4
-  pinMode(LED_eeprom, OUTPUT);   // gpio5
-  pinMode(relayOutlet, OUTPUT);  // kulso aljzat
-  pinMode(relayEN, OUTPUT);
-  for (int i = 0; i < NUM_OUTPUTS; i++) {
-    pinMode(outputGPIOs[i], OUTPUT);
-  }
-  pinMode(WAKEUP_PIN, INPUT_PULLUP);
-  ledcSetup(ledChannel, freq, resolution);
-  ledcAttachPin(LED_eeprom, ledChannel);
-  allrelayoff();
-  digitalWrite(relayOutlet, HIGH);  // hosszabító lekapcsolása BOOT utan
-  esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);
-  Serial.begin(115200);  // a serial.print-eket kikommenteltem, ez csak azért kell hogy íráskor ne kelljen a reset + boot gombokat nyomogatni
-  delay(100);
-  ++bootCount;
-  Serial.println("Boot number: " + String(bootCount));
-  // Print the wakeup reason for ESP32
-  print_wakeup_reason();
-  EEPROM.begin(memoria_meret);
-  delay(100);
-  eeprom_check();
-  readeepromparameter();
-  eeprom_valid();
-  delay(100);
-  fct_goToSleep();
+
+void wifiOn() {
   initSPIFFS();
   initWebSocket();
-  watchDOG.start();
-  Serial.println("Start watchdog counter!");
-  ledUpdate.start();
-  counterFromBoot.start();
-  OnStateLedBleConnected.stop();
-  OnStateLedWithWifi.stop();
-  OnStateLed.stop();
-  button.attachDoubleClick(doubleClick);                             // wifi parameter reset
-  button.attachLongPressStop(LongPressStop);                         // tesztmod aktivalasa
-  button.attachClick(click);                                         // reset watchdog
-  xTaskCreatePinnedToCore(loop2, "loop2", 10000, NULL, 1, NULL, 1);  // loop 2 10000-nél lehet kevesebb is, én nem kísérleteztem, gomb kezelés, led kezelés, otp update...
   // Load values saved in SPIFFS
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
@@ -1371,7 +1337,7 @@ void setup() {
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       request->send(SPIFFS, "/index.html", "text/html", false);
     });
-
+    server.serveStatic("/", SPIFFS, "/");
     server.begin();
   } else {
     wifiOk = false;
@@ -1382,7 +1348,7 @@ void setup() {
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
     Serial.println(IP);
-    
+
     // Web Server Root URL
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
       request->send(SPIFFS, "/wifimanager.html", "text/html");
@@ -1435,7 +1401,9 @@ void setup() {
     });
     server.begin();
   }
-  server.serveStatic("/", SPIFFS, "/");
+}
+
+void wifiInterface() {
   ElegantOTA.begin(&server);  // Start ElegantOTA
   // ElegantOTA callbacks
   ElegantOTA.onStart(onOTAStart);
@@ -1446,6 +1414,48 @@ void setup() {
   server.begin();
   Serial.println("Webserial and ElegantOTA started!");
   Serial.println("HTTP server started:" + WiFi.localIP().toString());
+}
+
+void setup() {
+  pinMode(LED_wifi, OUTPUT);     // gpio4
+  pinMode(LED_eeprom, OUTPUT);   // gpio5
+  pinMode(relayOutlet, OUTPUT);  // kulso aljzat
+  pinMode(relayEN, OUTPUT);
+  for (int i = 0; i < NUM_OUTPUTS; i++) {
+    pinMode(outputGPIOs[i], OUTPUT);
+  }
+  pinMode(WAKEUP_PIN, INPUT_PULLUP);
+  ledcSetup(ledChannel, freq, resolution);
+  ledcAttachPin(LED_eeprom, ledChannel);
+  allrelayoff();
+  digitalWrite(relayOutlet, HIGH);  // hosszabító lekapcsolása BOOT utan
+  esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);
+  Serial.begin(115200);  // a serial.print-eket kikommenteltem, ez csak azért kell hogy íráskor ne kelljen a reset + boot gombokat nyomogatni
+  delay(100);
+  ++bootCount;
+  Serial.println("Boot number: " + String(bootCount));
+  // Print the wakeup reason for ESP32
+  print_wakeup_reason();
+  EEPROM.begin(memoria_meret);
+  delay(100);
+  eeprom_check();
+  readeepromparameter();
+  eeprom_valid();
+  delay(100);
+  fct_goToSleep();
+  watchDOG.start();
+  Serial.println("Start watchdog counter!");
+  ledUpdate.start();
+  counterFromBoot.start();
+  OnStateLedBleConnected.stop();
+  OnStateLedWithWifi.stop();
+  OnStateLed.stop();
+  button.attachDoubleClick(doubleClick);                             // wifi parameter reset
+  button.attachLongPressStop(LongPressStop);                         // tesztmod aktivalasa
+  button.attachClick(click);                                         // reset watchdog
+  xTaskCreatePinnedToCore(loop2, "loop2", 10000, NULL, 1, NULL, 1);  // loop 2 10000-nél lehet kevesebb is, én nem kísérleteztem, gomb kezelés, led kezelés, otp update...
+  wifiOn();
+  wifiInterface();
   digitalWrite(relayEN, HIGH);  // relek engedelyezese
   Serial.print("Hutesuzemmod aktív?: ");
   Serial.println(hutesUzemmod);
