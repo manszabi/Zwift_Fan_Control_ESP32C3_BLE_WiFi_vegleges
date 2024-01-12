@@ -889,7 +889,7 @@ void relek() {
           break;
         case 1:
           digitalWrite(relayGPIOs[0], LOW);
-          periodrele = kesleltetes0;
+          periodrele = kesleltetes1;
           break;
         case 2:
           digitalWrite(relayGPIOs[1], LOW);
@@ -1294,12 +1294,12 @@ void fct_counterFromBoot() {
   if (fromBootCounter == 10) {
     digitalWrite(relayOutlet, LOW);  // hosszabító bekapcsolása - edzogorgo felkapcsolasa
   }
-  if (fromBootCounter == 90) {
+  if (fromBootCounter == 90 && (hutesUzemmod == 0 || teszteles == 0 || kalibralas == 0)) {
     if (!connected) {
       digitalWrite(relayOutlet, HIGH);  // hosszabító lekapcsolása ha nincs bluetooth csatlakozas
     }
   }
-  if (fromBootCounter == 300 && hutesUzemmod == 0)  // webserver leállítása
+  if (fromBootCounter == 300 && (hutesUzemmod == 0 || teszteles == 0 || kalibralas == 0))  // webserver leállítása
   {
     Serial.end();
     server.end();
@@ -1307,8 +1307,9 @@ void fct_counterFromBoot() {
     WiFi.mode(WIFI_OFF);
     stopServer = true;
     counterFromBoot.stop();
-  } else if (fromBootCounter == 300 && hutesUzemmod == 1) {
+  } else if (fromBootCounter == 300 && (hutesUzemmod == 1 || teszteles == 1 || kalibralas == 1)) {
     counterFromBoot.stop();
+    stopServer = false;
   }
 }
 
@@ -1550,13 +1551,17 @@ void loop() {
           }
           digitalWrite(relayOutlet, LOW);  // hosszabító bekapcsolása
           if (adat > 0) {
-            fct_WatchdogReset();
+            if (!teszteles) {
+              fct_WatchdogReset();
+            }
           } else if (adat == 0) {
             forSleepTime = timetosleep * 2;
           }
           atlagolas();
           ventillatorvezerles();
-          kiiras();
+          if (!stopServer) {
+            kiiras();
+          }
         } else if (doScan) {
           Serial.println("Lecsatlakozott.");
           Serial.println("Minden rele ki! Lecsatlakozas utan. ");
