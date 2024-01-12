@@ -119,6 +119,7 @@ unsigned long time_now;
 unsigned long time_nowrele;
 unsigned long time_elapsedtime = 0;
 unsigned long time_elapsedtimerele = 0;
+unsigned long time_elapsedtime_elozoTeljesitmenyzona = 0;
 unsigned long now;
 unsigned long elapsedtime = 0;
 uint16_t period = 1000;  // a loop masodpercenkent egyszer fut
@@ -136,7 +137,7 @@ uint32_t kesleltetes2;
 uint32_t kesleltetes3;
 uint32_t kesleltetessprint;
 char welcome[] = "Hello! Ezen az IP cimen az ESP32 ventillator vezerlo mukodik!. Webserial: IP/webserial. ";
-char help1[] = "Parancsok: help, reset, wifireset, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off, vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(watt/bpm), alapteljesitmeny(watt/bpm), elsozona(watt/bpm), masodikzona(watt/bpm), zonak? ";
+char help1[] = "Parancsok: help, reset, wifireset, off, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off, vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(watt/bpm), alapteljesitmeny(watt/bpm), elsozona(watt/bpm), masodikzona(watt/bpm), zonak? ";
 char help2[] = ",kesleltetesnulla(masodperc), kesleltetesegy(masodperc), kesleltetesketto(masodperc), kesleltetesharom(masodperc), kesleltetessprint(masodperc), kesleltetesend(masodperc), kesleltetesek?, hutesuzemmodbe, hutesuzemmodki, kalibralasbe, kalibralaski ";
 String inString = "";
 
@@ -589,6 +590,14 @@ void recvMsg(uint8_t *adat, size_t len) {
     ledPwmBlinking(3);
     rebootEsp();
   }
+  if (d == "off") {
+    WebSerial.println("Shutting down...");
+    unsigned long timeNowShutdown = millis();
+    while (millis() < timeNowShutdown + 1000) {
+    }
+    esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);  // biztos ami biztos
+    esp_deep_sleep_start();
+  }
   if (d == "wifireset") {
     wifi_config_t current_conf;
     esp_wifi_get_config((wifi_interface_t)ESP_IF_WIFI_STA, &current_conf);
@@ -824,29 +833,44 @@ void ventillatorvezerles() {
         case 1:
           digitalWrite(relayGPIOs[0], LOW);
           periodrele = kesleltetes1;
+          time_elapsedtimerele = millis();
           break;
         case 2:
           digitalWrite(relayGPIOs[1], LOW);
           periodrele = kesleltetes2;
+          time_elapsedtimerele = millis();
           break;
         case 3:
           digitalWrite(relayGPIOs[2], LOW);
           periodrele = kesleltetes3;
+          time_elapsedtimerele = millis();
           break;
         case 4:
           digitalWrite(relayGPIOs[2], LOW);
           periodrele = kesleltetessprint;
+          time_elapsedtimerele = millis();
           break;
         default:
-          digitalWrite(relayGPIOs[0], LOW);
           break;
       }
     }
+
     if (teljesitmenyzona == 0 && elozoTeljesitmenyzona >= 1) {
       periodrele = kesleltetesend;
+      time_elapsedtimerele = millis();
+      for (uint8_t i = 1; i <= NUM_RELAYS; i++) {
+        pinMode(relayGPIOs[i - 1], OUTPUT);
+        digitalWrite(relayGPIOs[i - 1], HIGH);
+      }
       digitalWrite(relayGPIOs[0], LOW);
     }
+
     elozoTeljesitmenyzona = teljesitmenyzona;
+
+    unsigned long timeNowRelekElott = millis();
+    while (millis() < timeNowRelekElott + 10) {
+    }
+
     relek();
   }
 }
@@ -865,15 +889,19 @@ void relek() {
           break;
         case 1:
           digitalWrite(relayGPIOs[0], LOW);
+          periodrele = kesleltetes0;
           break;
         case 2:
           digitalWrite(relayGPIOs[1], LOW);
+          periodrele = kesleltetes2;
           break;
         case 3:
           digitalWrite(relayGPIOs[2], LOW);
+          periodrele = kesleltetes3;
           break;
         case 4:
           digitalWrite(relayGPIOs[2], LOW);
+          periodrele = kesleltetes4;
           break;
         default:
           break;
