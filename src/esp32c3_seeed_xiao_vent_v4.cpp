@@ -258,7 +258,7 @@ void notifyClients(String state) {
 
 void onOTAStart() {
   // Log when OTA has started
-  Serial.println("OTA update started!");
+  if (stopServer == false) Serial.println("OTA update started!");
   // <Add your own code here>
 }
 
@@ -303,10 +303,10 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
              void *arg, uint8_t *data, size_t len) {
   switch (type) {
     case WS_EVT_CONNECT:
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      if (stopServer == false) Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
       break;
     case WS_EVT_DISCONNECT:
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      if (stopServer == false) Serial.printf("WebSocket client #%u disconnected\n", client->id());
       break;
     case WS_EVT_DATA:
       handleWebSocketMessage(arg, data, len);
@@ -325,36 +325,36 @@ void initWebSocket() {
 // Initialize SPIFFS
 void initSPIFFS() {
   if (!SPIFFS.begin(true)) {
-    Serial.println("An error has occurred while mounting SPIFFS");
+    if (stopServer == false) Serial.println("An error has occurred while mounting SPIFFS");
   }
-  Serial.println("SPIFFS mounted successfully");
+  if (stopServer == false) Serial.println("SPIFFS mounted successfully");
 }
 
 void onOTAProgress(size_t current, size_t final) {
   // Log every 1 second
   if (millis() - ota_progress_millis > 1000) {
     ota_progress_millis = millis();
-    Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
+    if (stopServer == false) Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
   }
 }
 
 void onOTAEnd(bool success) {
   // Log when OTA has finished
   if (success) {
-    Serial.println("OTA update finished successfully!");
+    if (stopServer == false) Serial.println("OTA update finished successfully!");
   } else {
-    Serial.println("There was an error during OTA update!");
+    if (stopServer == false) Serial.println("There was an error during OTA update!");
   }
   // <Add your own code here>
 }
 
 // Read File from SPIFFS
 String readFile(fs::FS &fs, const char *path) {
-  Serial.printf("Reading file: %s\r\n", path);
+  if (stopServer == false) Serial.printf("Reading file: %s\r\n", path);
 
   File file = fs.open(path);
   if (!file || file.isDirectory()) {
-    Serial.println("- failed to open file for reading");
+    if (stopServer == false) Serial.println("- failed to open file for reading");
     return String();
   }
 
@@ -368,24 +368,24 @@ String readFile(fs::FS &fs, const char *path) {
 
 // Write file to SPIFFS
 void writeFile(fs::FS &fs, const char *path, const char *message) {
-  Serial.printf("Writing file: %s\r\n", path);
+  if (stopServer == false) Serial.printf("Writing file: %s\r\n", path);
 
   File file = fs.open(path, FILE_WRITE);
   if (!file) {
-    Serial.println("- failed to open file for writing");
+    if (stopServer == false) Serial.println("- failed to open file for writing");
     return;
   }
   if (file.print(message)) {
-    Serial.println("- file written");
+    if (stopServer == false) Serial.println("- file written");
   } else {
-    Serial.println("- write failed");
+    if (stopServer == false) Serial.println("- write failed");
   }
 }
 
 // Initialize WiFi
 bool initWiFi() {
   if (ssid == "" || ip == "") {
-    Serial.println("Undefined SSID or IP address.");
+    if (stopServer == false) Serial.println("Undefined SSID or IP address.");
     return false;
   }
 
@@ -395,11 +395,11 @@ bool initWiFi() {
 
 
   if (!WiFi.config(localIP, localGateway, subnet)) {
-    Serial.println("STA Failed to configure");
+    if (stopServer == false) Serial.println("STA Failed to configure");
     return false;
   }
   WiFi.begin(ssid.c_str(), pass.c_str());
-  Serial.println("Connecting to WiFi...");
+  if (stopServer == false) Serial.println("Connecting to WiFi...");
 
   unsigned long currentMillis = millis();
   previousMillis = currentMillis;
@@ -407,12 +407,12 @@ bool initWiFi() {
   while (WiFi.status() != WL_CONNECTED) {
     currentMillis = millis();
     if (currentMillis - previousMillis >= interval) {
-      Serial.println("Failed to connect.");
+      if (stopServer == false) Serial.println("Failed to connect.");
       return false;
     }
   }
 
-  Serial.println(WiFi.localIP());
+  if (stopServer == false) Serial.println(WiFi.localIP());
   return true;
 }
 
@@ -455,19 +455,19 @@ void allrelayoff() {
 
 void setDelay(String d, String index, uint32_t &delay, uint16_t eepromAddress, uint32_t maxDelay) {
   if (d.indexOf(index) >= 0) {
-    WebSerial.println(inString.toInt());
+    if (stopServer == false) WebSerial.println(inString.toInt());
     if (inString.toInt() != 0 && inString.toInt() > 0 && inString.toInt() < maxDelay) {
       uint32_t i = inString.toInt();
       delay = i * 1000;
       EEPROM.put(eepromAddress, i);
       eeprom_commit();
-      WebSerial.print("A ");
-      WebSerial.print(index);
-      WebSerial.print(": ");
-      WebSerial.print(delay / 1000);
-      WebSerial.println(" másodperc értékű lett.");
+      if (stopServer == false) WebSerial.print("A ");
+      if (stopServer == false) WebSerial.print(index);
+      if (stopServer == false) WebSerial.print(": ");
+      if (stopServer == false) WebSerial.print(delay / 1000);
+      if (stopServer == false) WebSerial.println(" másodperc értékű lett.");
     } else {
-      WebSerial.println("Hibas adat!");
+      if (stopServer == false) WebSerial.println("Hibas adat!");
       kiirkesleltetesek();
     }
   }
@@ -475,7 +475,7 @@ void setDelay(String d, String index, uint32_t &delay, uint16_t eepromAddress, u
 
 void setZone(String d, String index, uint16_t &zone, uint16_t eepromAddress, uint16_t minZone, uint16_t maxZone) {
   if (d.indexOf(index) >= 0) {
-    WebSerial.println(inString.toInt());
+    if (stopServer == false) WebSerial.println(inString.toInt());
     if (inString.toInt() != 0 && inString.toInt() > minZone && inString.toInt() < maxZone) {
       uint16_t i = inString.toInt();
       zone = i;
@@ -483,7 +483,7 @@ void setZone(String d, String index, uint16_t &zone, uint16_t eepromAddress, uin
       eeprom_commit();
       kiirzonak();
     } else {
-      WebSerial.println("Hibas " + index + " adat!");
+      if (stopServer == false) WebSerial.println("Hibas " + index + " adat!");
       kiirzonak();
     }
   }
@@ -510,7 +510,7 @@ void setVent(String d, String index, int relayIndex) {
 }
 
 void recvMsg(uint8_t *adat, size_t len) {
-  WebSerial.println("Received adat...");
+  if (stopServer == false) WebSerial.println("Received adat...");
   String d = "";
   inString = "";
   for (uint8_t i = 0; i < len; i++) {
@@ -520,7 +520,7 @@ void recvMsg(uint8_t *adat, size_t len) {
       inString += (char)incar;
     }
   }
-  WebSerial.println(d);
+  if (stopServer == false) WebSerial.println(d);
 
   setDelay(d, "kesleltetesnulla", kesleltetes0, 40, 120000);
   setDelay(d, "kesleltetesegy", kesleltetes1, 50, 120000);
@@ -545,13 +545,13 @@ void recvMsg(uint8_t *adat, size_t len) {
     kiirkesleltetesek();
   }
   if (d == "ventoff") {
-    WebSerial.println("Ventillatorok kikapcsolva.");
+    if (stopServer == false) WebSerial.println("Ventillatorok kikapcsolva.");
     vent = 0;
     releteszt = 0;
     allrelayoff();
   }
   if (d == "venton") {
-    WebSerial.println("Ventillatorok visszakapcsolva.");
+    if (stopServer == false) WebSerial.println("Ventillatorok visszakapcsolva.");
     elozoTeljesitmenyzona = 0;
     periodrele = 0;
     releteszt = 0;
@@ -591,10 +591,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     rebootEsp();
   }
   if (d == "off") {
-    WebSerial.println("Shutting down...");
-    unsigned long timeNowShutdown = millis();
-    while (millis() < timeNowShutdown + 1000) {
-    }
+    if (stopServer == false) Serial.println("Shutting down...");
     esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);  // biztos ami biztos
     esp_deep_sleep_start();
   }
@@ -613,11 +610,11 @@ void recvMsg(uint8_t *adat, size_t len) {
   }
   if (d == "lcdon") {
     //kijelzo kezeles
-    WebSerial.println("LCD ON!");
+    if (stopServer == false) WebSerial.println("LCD ON!");
   }
   if (d == "lcdoff") {
     //kijelzo kezeles
-    WebSerial.println("LCD OFF!");
+    if (stopServer == false) WebSerial.println("LCD OFF!");
   }
   if (d == "hutesuzemmodbe") {
     hutesUzemmod = 1;
@@ -660,8 +657,8 @@ void recvMsg(uint8_t *adat, size_t len) {
     rebootEsp();
   }
   if (d == "help") {
-    WebSerial.println(help1);
-    WebSerial.println(help2);
+    if (stopServer == false) WebSerial.println(help1);
+    if (stopServer == false) WebSerial.println(help2);
   }
   if (d.indexOf("mymaxheartrate") >= 0) {
     if (inString.toInt() != 0 && inString.toInt() > 0 && inString.toInt() < 220) {
@@ -723,12 +720,12 @@ void recvMsg(uint8_t *adat, size_t len) {
   }
   if (d.indexOf("milyenerzekelo") >= 0) {
     if (erzekelo == 111) {
-      WebSerial.println("Pulzusmero.");
+      if (stopServer == false) WebSerial.println("Pulzusmero.");
     } else if (erzekelo == 222) {
-      WebSerial.println("Wattmero.");
+      if (stopServer == false) WebSerial.println("Wattmero.");
     } else if (erzekelo == 0) {
-      WebSerial.println("Parameter hiba! reset kell!");
-      WebSerial.println("Ujrainditas!");
+      if (stopServer == false) WebSerial.println("Parameter hiba! reset kell!");
+      if (stopServer == false) WebSerial.println("Ujrainditas!");
       unsigned long time_start_reset = millis();
       while ((millis() - time_start_reset) < 1000) {
         ;
@@ -911,33 +908,33 @@ void relek() {
 }
 
 void kiirzonak() {
-  WebSerial.print("Alapteljesitmeny: ");
-  WebSerial.print(alapteljesitmeny);
-  WebSerial.print(" Zona 1: ");
-  WebSerial.print(ZONE_1);
-  WebSerial.print(" Zona 2: ");
-  WebSerial.print(ZONE_2);
-  WebSerial.print(" sprintzona: ");
-  WebSerial.print(sprintzona);
-  WebSerial.println(" (watt/bpm) értékű.");
+  if (stopServer == false) WebSerial.print("Alapteljesitmeny: ");
+  if (stopServer == false) WebSerial.print(alapteljesitmeny);
+  if (stopServer == false) WebSerial.print(" Zona 1: ");
+  if (stopServer == false) WebSerial.print(ZONE_1);
+  if (stopServer == false) WebSerial.print(" Zona 2: ");
+  if (stopServer == false) WebSerial.print(ZONE_2);
+  if (stopServer == false) WebSerial.print(" sprintzona: ");
+  if (stopServer == false) WebSerial.print(sprintzona);
+  if (stopServer == false) WebSerial.println(" (watt/bpm) értékű.");
 }
 
 void kiirkesleltetesek() {
-  WebSerial.print("A kesleltetes0: ");
-  WebSerial.print(kesleltetes0 / 1000);
-  WebSerial.print(" kesleltetes1 ");
-  WebSerial.print(kesleltetes1 / 1000);
-  WebSerial.print(" kesleltetes2: ");
-  WebSerial.print(kesleltetes2 / 1000);
-  WebSerial.print(" kesleltetes3: ");
-  WebSerial.print(kesleltetes3 / 1000);
-  WebSerial.print(" kesleltetessprint: ");
-  WebSerial.print(kesleltetessprint / 1000);
-  WebSerial.print(" kesleltetesend: ");
-  WebSerial.print(kesleltetesend / 1000);
-  WebSerial.print(" 'periodrele' valtozo erteke: ");
-  WebSerial.print(periodrele / 1000);
-  WebSerial.println(" másodperc értékű.");
+  if (stopServer == false) WebSerial.print("A kesleltetes0: ");
+  if (stopServer == false) WebSerial.print(kesleltetes0 / 1000);
+  if (stopServer == false) WebSerial.print(" kesleltetes1 ");
+  if (stopServer == false) WebSerial.print(kesleltetes1 / 1000);
+  if (stopServer == false) WebSerial.print(" kesleltetes2: ");
+  if (stopServer == false) WebSerial.print(kesleltetes2 / 1000);
+  if (stopServer == false) WebSerial.print(" kesleltetes3: ");
+  if (stopServer == false) WebSerial.print(kesleltetes3 / 1000);
+  if (stopServer == false) WebSerial.print(" kesleltetessprint: ");
+  if (stopServer == false) WebSerial.print(kesleltetessprint / 1000);
+  if (stopServer == false) WebSerial.print(" kesleltetesend: ");
+  if (stopServer == false) WebSerial.print(kesleltetesend / 1000);
+  if (stopServer == false) WebSerial.print(" 'periodrele' valtozo erteke: ");
+  if (stopServer == false) WebSerial.print(periodrele / 1000);
+  if (stopServer == false) WebSerial.println(" másodperc értékű.");
 }
 
 void kiiras() {
@@ -956,8 +953,8 @@ void kiiras() {
 }
 
 void kiir(String szoveg, uint16_t ertek) {
-  WebSerial.print(szoveg);
-  WebSerial.println(ertek);
+  if (stopServer == false) WebSerial.print(szoveg);
+  if (stopServer == false) WebSerial.println(ertek);
 }
 
 class MyClientCallback : public BLEClientCallbacks {
@@ -970,36 +967,36 @@ class MyClientCallback : public BLEClientCallbacks {
 };
 
 bool connectToServer(BLEUUID serviceUUID, BLEUUID charUUID) {
-  Serial.print("Forming a connection to ");
-  Serial.println(myDevice->getAddress().toString().c_str());
+  if (stopServer == false) Serial.print("Forming a connection to ");
+  if (stopServer == false) Serial.println(myDevice->getAddress().toString().c_str());
   BLEClient *pClient = BLEDevice::createClient();
-  Serial.println(" - Created client");
+  if (stopServer == false) Serial.println(" - Created client");
   pClient->setClientCallbacks(new MyClientCallback());
   pClient->connect(myDevice);
-  Serial.println(" - Connected to server");
+  if (stopServer == false) Serial.println(" - Connected to server");
   BLERemoteService *pRemoteService = pClient->getService(serviceUUID);
 
   if (pRemoteService == nullptr) {
-    Serial.print("Failed to find our service UUID: ");
-    Serial.println(serviceUUID.toString().c_str());
+    if (stopServer == false) Serial.print("Failed to find our service UUID: ");
+    if (stopServer == false) Serial.println(serviceUUID.toString().c_str());
     pClient->disconnect();
     return false;
   }
-  Serial.println(" - Found our service");
+  if (stopServer == false) Serial.println(" - Found our service");
 
   pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
 
   if (pRemoteCharacteristic == nullptr) {
-    Serial.print("Failed to find our characteristic UUID: ");
-    Serial.println(charUUID.toString().c_str());
+    if (stopServer == false) Serial.print("Failed to find our characteristic UUID: ");
+    if (stopServer == false) Serial.println(charUUID.toString().c_str());
     pClient->disconnect();
     return false;
   }
-  Serial.println(" - Found our characteristic");
+  if (stopServer == false) Serial.println(" - Found our characteristic");
   if (pRemoteCharacteristic->canRead()) {
     std::string value = pRemoteCharacteristic->readValue();
-    Serial.print("The characteristic value was: ");
-    Serial.println(value.c_str());
+    if (stopServer == false) Serial.print("The characteristic value was: ");
+    if (stopServer == false) Serial.println(value.c_str());
   }
 
   if (pRemoteCharacteristic->canNotify()) {
@@ -1012,8 +1009,8 @@ bool connectToServer(BLEUUID serviceUUID, BLEUUID charUUID) {
 
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice advertisedDevice) {
-    Serial.print("BLE Advertised Device found: ");
-    Serial.println(advertisedDevice.toString().c_str());
+    if (stopServer == false) Serial.print("BLE Advertised Device found: ");
+    if (stopServer == false) Serial.println(advertisedDevice.toString().c_str());
     bool isHeartService = erzekelo == 111 && advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService(SERVICE1_UUID);
     bool isPowerService = erzekelo == 222 && advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService(SERVICE2_UUID);
     if (isHeartService || isPowerService) {
@@ -1041,8 +1038,8 @@ void eeprom_check() {
     if (reset == 0) {  //mivel ha nem en kezdemenyztem akkor gond van
       ledPwmBlinking(4);
     }
-    Serial.println("EEPROM is not formatted!");
-    Serial.println("Formatting EEPROM...");
+    if (stopServer == false) Serial.println("EEPROM is not formatted!");
+    if (stopServer == false) Serial.println("Formatting EEPROM...");
     for (uint8_t i = 0; i < memoria_meret; i++) {
       EEPROM.write(i, 0);
       EEPROM.commit();
@@ -1050,29 +1047,29 @@ void eeprom_check() {
     EEPROM.write(0, 0x55);
     EEPROM.write(1, 0xAA);
     EEPROM.commit();
-    Serial.println("Done!");
+    if (stopServer == false) Serial.println("Done!");
   } else {
-    Serial.println("EEPROM is formatted!");
+    if (stopServer == false) Serial.println("EEPROM is formatted!");
   }
 }
 
 void eeprom_commit() {
   if (EEPROM.commit()) {
-    Serial.println("EEPROM successfully committed");
+    if (stopServer == false) Serial.println("EEPROM successfully committed");
   } else {
-    Serial.println("ERROR! EEPROM commit failed");
+    if (stopServer == false) Serial.println("ERROR! EEPROM commit failed");
   }
 }
 
 void checkAndReset(int value, uint32_t defaultValue, uint16_t address, const char *name) {
-  uint32_t upperLimit;
-  if (reset == 1 || ZONE_2 == 0 || erzekelo == 0 || kesleltetes3 == 0)  // szuroprobaszeruen megnez par erteket eeprom.check utan
+  uint32_t upperLimit = 600000;
+  if (reset == 1 || value < 0 || value > upperLimit || ZONE_1 || ZONE_2 == 0 || sprintzona == 0 || erzekelo == 0 || kesleltetes3 == 0 || kesleltetes2 || kesleltetes3 || kesleltetessprint || kesleltetesend)  // szuroprobaszeruen megnez par erteket eeprom.check utan
   {
     value = defaultValue;
     EEPROM.put(address, value);
     eeprom_commit();
-    Serial.print(name);
-    Serial.println(" alapertekre irva a memoriaban!");
+    if (stopServer == false) Serial.print(name);
+    if (stopServer == false) Serial.println(" alapertekre irva a memoriaban!");
   }
   szamlalo = intervallum;
 }
@@ -1121,7 +1118,7 @@ void blekliens() {
   int pwrAdv = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_ADV);
   int pwrScan = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_SCAN);
   int pwrDef = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT);
-  WebSerial.println("Üdvözli az ESP32 ventillátor vezérlő! Csatlakozás a BLE eszközhöz...");
+  if (stopServer == false) WebSerial.println("Üdvözli az ESP32 ventillátor vezérlő! Csatlakozás a BLE eszközhöz...");
   BLEScan *pBLEScan = BLEDevice::getScan();
   pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(), false);
   pBLEScan->setInterval(1349);
@@ -1145,7 +1142,7 @@ void bleszerver(BLEUUID serviceUUID, BLEUUID charUUID) {
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);
   BLEDevice::startAdvertising();
-  Serial.println("Waiting a client connection to notify...");
+  if (stopServer == false) Serial.println("Waiting a client connection to notify...");
 }
 
 void fct_ledUpdate() {
@@ -1179,18 +1176,18 @@ void fct_Watchdog() {
     allrelayoff();  // relek kikapcsolása
     digitalWrite(relayOutlet, HIGH);
     digitalWrite(relayEN, LOW);
-    Serial.println("Minden rele ki!(watchdog)");
+    if (stopServer == false) Serial.println("Minden rele ki!(watchdog)");
     ledPwmBlinking(3);
-    Serial.println("Going to sleep now");
+    if (stopServer == false) Serial.println("Going to sleep now");
     delay(500);
     esp_deep_sleep_start();
-    Serial.println("This will never be printed");
+    if (stopServer == false) Serial.println("This will never be printed");
   }
 }
 
 void fct_WatchdogReset() {
   watchdogCounter = watchdogMinCounter;
-  Serial.println("WatchdogReset!");
+  if (stopServer == false) Serial.println("WatchdogReset!");
 }
 
 void print_wakeup_reason() {
@@ -1200,22 +1197,22 @@ void print_wakeup_reason() {
 
   switch (wakeup_reason) {
     case ESP_SLEEP_WAKEUP_EXT0:
-      Serial.println("Wakeup caused by external signal using RTC_IO");
+      if (stopServer == false) Serial.println("Wakeup caused by external signal using RTC_IO");
       break;
     case ESP_SLEEP_WAKEUP_EXT1:
-      Serial.println("Wakeup caused by external signal using RTC_CNTL");
+      if (stopServer == false) Serial.println("Wakeup caused by external signal using RTC_CNTL");
       break;
     case ESP_SLEEP_WAKEUP_TIMER:
-      Serial.println("Wakeup caused by timer");
+      if (stopServer == false) Serial.println("Wakeup caused by timer");
       break;
     case ESP_SLEEP_WAKEUP_TOUCHPAD:
-      Serial.println("Wakeup caused by touchpad");
+      if (stopServer == false) Serial.println("Wakeup caused by touchpad");
       break;
     case ESP_SLEEP_WAKEUP_ULP:
-      Serial.println("Wakeup caused by ULP program");
+      if (stopServer == false) Serial.println("Wakeup caused by ULP program");
       break;
     default:
-      Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
+      if (stopServer == false) Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
       break;
   }
 }
@@ -1223,16 +1220,16 @@ void print_wakeup_reason() {
 void click() {
   fct_WatchdogReset();
   fromBootCounter = 0;
-  stopServer = false;
   counterFromBoot.start();
   Serial.begin(115200);
   wifiOn();
   wifiInterface();
+  stopServer = false;
   ledPwmBlinking(1);
 }
 
 void doubleClick() {
-  Serial.println("Minden WiFi parameter resetelve! Reboot.");
+  if (stopServer == false) Serial.println("Minden WiFi parameter resetelve! Reboot.");
   delay(500);
   wifi_config_t current_conf;
   esp_wifi_get_config((wifi_interface_t)ESP_IF_WIFI_STA, &current_conf);
@@ -1301,15 +1298,16 @@ void fct_counterFromBoot() {
   }
   if (fromBootCounter == 300 && (hutesUzemmod == 0 || teszteles == 0 || kalibralas == 0))  // webserver leállítása
   {
+    stopServer = true;
+    SPIFFS.end();
     Serial.end();
     server.end();
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
-    stopServer = true;
     counterFromBoot.stop();
   } else if (fromBootCounter == 300 && (hutesUzemmod == 1 || teszteles == 1 || kalibralas == 1)) {
-    counterFromBoot.stop();
     stopServer = false;
+    counterFromBoot.stop();
   }
 }
 
@@ -1318,18 +1316,18 @@ void fct_goToSleep() {
   if (reboot == 0) {
     esp_sleep_wakeup_cause_t cause;
     cause = esp_sleep_get_wakeup_cause();
-    Serial.print("Wakeup caused by(number): ");
-    Serial.println(cause);
+    if (stopServer == false) Serial.print("Wakeup caused by(number): ");
+    if (stopServer == false) Serial.println(cause);
     switch (cause) {
       case ESP_SLEEP_WAKEUP_UNDEFINED:
-        Serial.println("Reset was not caused by exit from deep sleep.");
+        if (stopServer == false) Serial.println("Reset was not caused by exit from deep sleep.");
 
         esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);  // biztos ami biztos
         esp_deep_sleep_start();
         break;
       default:
         esp_deep_sleep_enable_gpio_wakeup(BIT(D1), ESP_GPIO_WAKEUP_GPIO_LOW);  // biztos ami biztos
-        Serial.printf("Wakeup caused by: %d\n", cause);
+        if (stopServer == false) Serial.printf("Wakeup caused by: %d\n", cause);
         break;
     }
   }
@@ -1356,10 +1354,10 @@ void wifiOn() {
   pass = readFile(SPIFFS, passPath);
   ip = readFile(SPIFFS, ipPath);
   gateway = readFile(SPIFFS, gatewayPath);
-  Serial.println(ssid);
-  Serial.println(pass);
-  Serial.println(ip);
-  Serial.println(gateway);
+  if (stopServer == false) Serial.println(ssid);
+  if (stopServer == false) Serial.println(pass);
+  if (stopServer == false) Serial.println(ip);
+  if (stopServer == false) Serial.println(gateway);
   if (initWiFi()) {
     wifiOk = true;
     // Route for root / web page
@@ -1371,12 +1369,12 @@ void wifiOn() {
   } else {
     wifiOk = false;
     // Connect to Wi-Fi network with SSID and password
-    Serial.println("Setting AP (Access Point)");
+    if (stopServer == false) Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
     WiFi.softAP("ESP-WIFI-MANAGER", NULL);
     IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(IP);
+    if (stopServer == false) Serial.print("AP IP address: ");
+    if (stopServer == false) Serial.println(IP);
 
     // Web Server Root URL
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -1393,32 +1391,32 @@ void wifiOn() {
           // HTTP POST ssid value
           if (p->name() == PARAM_INPUT_1) {
             ssid = p->value().c_str();
-            Serial.print("SSID set to: ");
-            Serial.println(ssid);
+            if (stopServer == false) Serial.print("SSID set to: ");
+            if (stopServer == false) Serial.println(ssid);
             // Write file to save value
             writeFile(SPIFFS, ssidPath, ssid.c_str());
           }
           // HTTP POST pass value
           if (p->name() == PARAM_INPUT_2) {
             pass = p->value().c_str();
-            Serial.print("Password set to: ");
-            Serial.println(pass);
+            if (stopServer == false) Serial.print("Password set to: ");
+            if (stopServer == false) Serial.println(pass);
             // Write file to save value
             writeFile(SPIFFS, passPath, pass.c_str());
           }
           // HTTP POST ip value
           if (p->name() == PARAM_INPUT_3) {
             ip = p->value().c_str();
-            Serial.print("IP Address set to: ");
-            Serial.println(ip);
+            if (stopServer == false) Serial.print("IP Address set to: ");
+            if (stopServer == false) Serial.println(ip);
             // Write file to save value
             writeFile(SPIFFS, ipPath, ip.c_str());
           }
           // HTTP POST gateway value
           if (p->name() == PARAM_INPUT_4) {
             gateway = p->value().c_str();
-            Serial.print("Gateway set to: ");
-            Serial.println(gateway);
+            if (stopServer == false) Serial.print("Gateway set to: ");
+            if (stopServer == false) Serial.println(gateway);
             // Write file to save value
             writeFile(SPIFFS, gatewayPath, gateway.c_str());
           }
@@ -1441,8 +1439,8 @@ void wifiInterface() {
   WebSerial.begin(&server);
   WebSerial.msgCallback(recvMsg);
   server.begin();
-  Serial.println("Webserial and ElegantOTA started!");
-  Serial.println("HTTP server started:" + WiFi.localIP().toString());
+  if (stopServer == false) Serial.println("Webserial and ElegantOTA started!");
+  if (stopServer == false) Serial.println("HTTP server started:" + WiFi.localIP().toString());
 }
 
 void setup() {
@@ -1462,7 +1460,7 @@ void setup() {
   Serial.begin(115200);  // a serial.print-eket kikommenteltem, ez csak azért kell hogy íráskor ne kelljen a reset + boot gombokat nyomogatni
   delay(100);
   ++bootCount;
-  Serial.println("Boot number: " + String(bootCount));
+  if (stopServer == false) Serial.println("Boot number: " + String(bootCount));
   // Print the wakeup reason for ESP32
   print_wakeup_reason();
   EEPROM.begin(memoria_meret);
@@ -1473,7 +1471,7 @@ void setup() {
   delay(100);
   fct_goToSleep();
   watchDOG.start();
-  Serial.println("Start watchdog counter!");
+  if (stopServer == false) Serial.println("Start watchdog counter!");
   ledUpdate.start();
   counterFromBoot.start();
   OnStateLedBleConnected.stop();
@@ -1486,16 +1484,16 @@ void setup() {
   wifiOn();
   wifiInterface();
   digitalWrite(relayEN, HIGH);  // relek engedelyezese
-  Serial.print("Hutesuzemmod aktív?: ");
-  Serial.println(hutesUzemmod);
+  if (stopServer == false) Serial.print("Hutesuzemmod aktív?: ");
+  if (stopServer == false) Serial.println(hutesUzemmod);
   if (hutesUzemmod < 0 || hutesUzemmod > 1 || teszteles < 0 || teszteles > 1 || kalibralas < 0 || kalibralas > 1) {
     kalibralas = 0;
     hutesUzemmod = 0;
     teszteles = 0;
-    Serial.println("hutesUzemmod/teszteles/kalibralas parameter hiba!");
+    if (stopServer == false) Serial.println("hutesUzemmod/teszteles/kalibralas parameter hiba!");
   }
-  Serial.print("Tesztelés aktív?: ");
-  Serial.println(teszteles);
+  if (stopServer == false) Serial.print("Tesztelés aktív?: ");
+  if (stopServer == false) Serial.println(teszteles);
   if (teszteles == 0 && hutesUzemmod == 0 && kalibralas == 0)  // teszteleshez
   {
     blekliens();
@@ -1517,7 +1515,7 @@ void loop() {
   if (kalibralas == 0) {
     if (hutesUzemmod < 0 || hutesUzemmod > 1) {
       hutesUzemmod = 0;
-      Serial.println("hutesUzemmod parameter hiba!");
+      if (stopServer == false) Serial.println("hutesUzemmod parameter hiba!");
     }
     time_now = millis();
     if (time_now - time_elapsedtime >= period) {
@@ -1525,7 +1523,7 @@ void loop() {
       if (hutesUzemmod == 0) {
         readeepromparameter();
         if (teszteles == 1) {
-          WebSerial.println("Vigyazz! A Teszt mod aktiv! (webserial: run)");
+          if (stopServer == false) WebSerial.println("Vigyazz! A Teszt mod aktiv! (webserial: run)");
           connected = true;
           notification = true;
           randNumber = random(60, 350);
@@ -1533,18 +1531,18 @@ void loop() {
         }
         if (doConnect == true) {
           if (connectToServer(serviceerzekeloUUID, charerzekeloUUID)) {
-            Serial.println("Csatlakozva a BLE szerverhez!");
-            WebSerial.println("Csatlakozva a BLE szerverhez!");
+            if (stopServer == false) Serial.println("Csatlakozva a BLE szerverhez!");
+            if (stopServer == false) WebSerial.println("Csatlakozva a BLE szerverhez!");
           } else {
-            Serial.println("Nem lehet csatlakozni a BLE szerverhez!");
-            WebSerial.println("Nem lehet csatlakozni a BLE szerverhez!");
+            if (stopServer == false) Serial.println("Nem lehet csatlakozni a BLE szerverhez!");
+            if (stopServer == false) WebSerial.println("Nem lehet csatlakozni a BLE szerverhez!");
           }
           doConnect = false;
         }
         if (connected) {
           if (notification == false) {
-            Serial.println("Adatok fogadasanak bekapcsolasa!");
-            WebSerial.println("Adatok fogadasanak bekapcsolasa!");
+            if (stopServer == false) Serial.println("Adatok fogadasanak bekapcsolasa!");
+            if (stopServer == false) WebSerial.println("Adatok fogadasanak bekapcsolasa!");
             const uint8_t onPacket[] = { 0x01, 0x0 };
             pRemoteCharacteristic->getDescriptor(BLEUUID((uint16_t)0x2902))->writeValue((uint8_t *)onPacket, 2, true);
             notification = true;
@@ -1563,21 +1561,21 @@ void loop() {
             kiiras();
           }
         } else if (doScan) {
-          Serial.println("Lecsatlakozott.");
-          Serial.println("Minden rele ki! Lecsatlakozas utan. ");
+          if (stopServer == false) Serial.println("Lecsatlakozott.");
+          if (stopServer == false) Serial.println("Minden rele ki! Lecsatlakozas utan. ");
           alapparameter();
           BLEDevice::getScan()->start(0);  // ha lecsatlakozott ujra keresd folyamatosan
           allrelayoff();
         }
       } else if (hutesUzemmod == 1) {
-        Serial.println("Hutes-uzemmod aktiv.");
-        WebSerial.println("Vigyazz! Hutesuzzemod aktiv! (webserial: hutesuzemmodki)");
+        if (stopServer == false) Serial.println("Hutes-uzemmod aktiv.");
+        if (stopServer == false) WebSerial.println("Vigyazz! Hutesuzzemod aktiv! (webserial: hutesuzemmodki)");
         fct_WatchdogReset();
       }
     }
   } else if (kalibralas == 1) {
-    Serial.println("Kalibralas-uzemmod aktiv.");
-    WebSerial.println("Vigyazz! Kalibralas aktiv! (webserial: kalibralaski)");
+    if (stopServer == false) Serial.println("Kalibralas-uzemmod aktiv.");
+    if (stopServer == false) WebSerial.println("Vigyazz! Kalibralas aktiv! (webserial: kalibralaski)");
   }
 }
 
