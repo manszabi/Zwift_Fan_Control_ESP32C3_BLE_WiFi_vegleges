@@ -355,6 +355,10 @@ void onOTAEnd(bool success) {
       Serial.println("There was an error during OTA update!");
   }
   // <Add your own code here>
+  unsigned long timeNowonOTAEnd = millis();
+    while (millis() < timeNowonOTAEnd + 1000) {
+    }
+    rebootEsp();
 }
 
 // Read File from SPIFFS
@@ -1168,7 +1172,7 @@ void eeprom_commit() {
 
 void checkAndReset(int value, uint32_t defaultValue, uint16_t address, const char *name) {
   uint32_t upperLimit = 600000;
-  if (reset == 1 || value < 0 || value > upperLimit || ZONE_1 || ZONE_2 == 0 || sprintzona == 0 || erzekelo == 0 || kesleltetes3 == 0 || kesleltetes2 || kesleltetes3 || kesleltetessprint || kesleltetesend)  // szuroprobaszeruen megnez par erteket eeprom.check utan
+  if (reset == 1 || value < 0 || value > upperLimit || ZONE_1 == 0 || ZONE_2 == 0 || sprintzona == 0 || erzekelo == 0 || kesleltetes2 == 0 || kesleltetes3 == 0 || kesleltetessprint == 0 || kesleltetesend == 0)  // szuroprobaszeruen megnez par erteket eeprom.check utan
   {
     value = defaultValue;
     EEPROM.put(address, value);
@@ -1442,8 +1446,10 @@ void fct_goToSleep() {
     EEPROM.put(160, bootCounter);
     eeprom_commit();
   }
-  if (bootCounter > 1) {
-    --bootCounter;
+  if (bootCounter > 0) {
+    bootCounter = bootCounter - 1;
+    EEPROM.put(160, bootCounter);
+    eeprom_commit();
     if (bootCounter == 0) {
       teszteles = 0;
       hutesUzemmod = 0;
@@ -1677,22 +1683,33 @@ void setup() {
 }
 
 void loop() {
-  if (kalibralas == 0) {
-    if (hutesUzemmod < 0 || hutesUzemmod > 1) {
-      hutesUzemmod = 0;
+  time_now = millis();
+  if (time_now - time_elapsedtime >= period) {
+    time_elapsedtime = time_now;
+    if (kalibralas < 0 || kalibralas > 1) {
+      kalibralas = 0;
       if (stopServer == false)
-        Serial.println("hutesUzemmod parameter hiba!");
+        Serial.println("kalibralas parameter hiba!");
     }
-    time_now = millis();
-    if (time_now - time_elapsedtime >= period) {
-      time_elapsedtime = time_now;
+    if (kalibralas == 0) {
+      if (hutesUzemmod < 0 || hutesUzemmod > 1) {
+        hutesUzemmod = 0;
+        if (stopServer == false)
+          Serial.println("hutesUzemmod parameter hiba!");
+      }
       if (hutesUzemmod == 0) {
+        if (teszteles < 0 || teszteles > 1) {
+          teszteles = 0;
+          if (stopServer == false)
+            Serial.println("teszteles parameter hiba!");
+        }
         readeepromparameter();
         if (teszteles == 1) {
           if (stopServer == false)
             WebSerial.println("Vigyazz! A Teszt mod aktiv! (webserial: run)");
           connected = true;
           notification = true;
+          doConnect = false;
           randNumber = random(60, 350);
           adat = randNumber;
         }
@@ -1749,12 +1766,13 @@ void loop() {
           WebSerial.println("Vigyazz! Hutesuzzemod aktiv! (webserial: hutesuzemmodki)");
         fct_WatchdogReset();
       }
+
+    } else if (kalibralas == 1) {
+      if (stopServer == false)
+        Serial.println("Kalibralas-uzemmod aktiv.");
+      if (stopServer == false)
+        WebSerial.println("Vigyazz! Kalibralas aktiv! (webserial: kalibralaski)");
     }
-  } else if (kalibralas == 1) {
-    if (stopServer == false)
-      Serial.println("Kalibralas-uzemmod aktiv.");
-    if (stopServer == false)
-      WebSerial.println("Vigyazz! Kalibralas aktiv! (webserial: kalibralaski)");
   }
 }
 
