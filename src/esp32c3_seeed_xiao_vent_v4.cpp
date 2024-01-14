@@ -605,7 +605,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(90, teszteles);
     eeprom_commit();
     EEPROM.put(160, bootCounter);
-    eeprom_commit;
+    eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -615,7 +615,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(90, teszteles);
     eeprom_commit();
     EEPROM.put(160, bootCounter);
-    eeprom_commit;
+    eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -669,7 +669,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(140, hutesUzemmod);
     eeprom_commit();
     EEPROM.put(160, bootCounter);
-    eeprom_commit;
+    eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -679,7 +679,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(140, hutesUzemmod);
     eeprom_commit();
     EEPROM.put(160, bootCounter);
-    eeprom_commit;
+    eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -695,7 +695,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(150, kalibralas);
     eeprom_commit();
     EEPROM.put(160, bootCounter);
-    eeprom_commit;
+    eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -705,7 +705,7 @@ void recvMsg(uint8_t *adat, size_t len) {
     EEPROM.put(150, kalibralas);
     eeprom_commit();
     EEPROM.put(160, bootCounter);
-    eeprom_commit;
+    eeprom_commit();
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -1440,7 +1440,7 @@ void fct_goToSleep() {
       Serial.print("bootCounter parameter hiba!");
     bootCounter = 0;
     EEPROM.put(160, bootCounter);
-    eeprom_commit;
+    eeprom_commit();
   }
   if (bootCounter > 1) {
     --bootCounter;
@@ -1455,7 +1455,7 @@ void fct_goToSleep() {
       EEPROM.put(140, hutesUzemmod);
       eeprom_commit();
       EEPROM.put(160, bootCounter);
-      eeprom_commit;
+      eeprom_commit();
     }
   }
   if (reboot == 0) {
