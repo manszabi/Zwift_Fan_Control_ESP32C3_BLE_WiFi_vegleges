@@ -86,8 +86,8 @@ bool stopServer = false;
 uint8_t reboot = 0;  // reboothoz hogy felébredjen ram-ban tárolom majd
 uint8_t hutesUzemmod = 0;
 uint8_t kalibralas = 0;
-uint8_t teszteles;
-uint8_t bootCounter;
+uint8_t teszteles = 0;
+uint8_t bootCounter = 0;
 RTC_DATA_ATTR int bootCount = 0;
 int elozoBootcount;
 
