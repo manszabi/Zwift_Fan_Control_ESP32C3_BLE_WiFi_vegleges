@@ -274,6 +274,11 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       int gpio = atoi((char *)data);
       if (gpio == outputGPIOs[0]) {
         digitalWrite(gpio, !digitalRead(gpio));
+        if (digitalRead(gpio)) {
+          releteszt = 0;
+        } else {
+          releteszt = 1;
+        }
         if (!digitalRead(gpio)) {
           digitalWrite(outputGPIOs[1], HIGH);
           digitalWrite(outputGPIOs[2], HIGH);
@@ -281,6 +286,11 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       }
       if (gpio == outputGPIOs[1]) {
         digitalWrite(gpio, !digitalRead(gpio));
+        if (digitalRead(gpio)) {
+          releteszt = 0;
+        } else {
+          releteszt = 1;
+        }
         if (!digitalRead(gpio)) {
           digitalWrite(outputGPIOs[0], HIGH);
           digitalWrite(outputGPIOs[2], HIGH);
@@ -288,13 +298,20 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       }
       if (gpio == outputGPIOs[2]) {
         digitalWrite(gpio, !digitalRead(gpio));
+        if (digitalRead(gpio)) {
+          releteszt = 0;
+        } else {
+          releteszt = 1;
+        }
         if (!digitalRead(gpio)) {
           digitalWrite(outputGPIOs[0], HIGH);
           digitalWrite(outputGPIOs[1], HIGH);
         }
       }
       if (gpio == outputGPIOs[3]) {
-        digitalWrite(gpio, !digitalRead(gpio));
+        if (!connected) {
+          digitalWrite(gpio, !digitalRead(gpio));
+        }
       }
       notifyClients(getOutputStates());
     }
@@ -356,9 +373,9 @@ void onOTAEnd(bool success) {
   }
   // <Add your own code here>
   unsigned long timeNowonOTAEnd = millis();
-    while (millis() < timeNowonOTAEnd + 1000) {
-    }
-    rebootEsp();
+  while (millis() < timeNowonOTAEnd + 2000) {
+  }
+  rebootEsp();
 }
 
 // Read File from SPIFFS
@@ -457,6 +474,7 @@ void alapparameter() {
   periodrele = 0;
   connected = false;
   notification = false;
+  doConnect = false;
   szamlalo = intervallum;
   teljesitmeny = 0;
   teljesitmenytemp = 0;
@@ -803,27 +821,21 @@ void recvMsg(uint8_t *adat, size_t len) {
 }
 
 static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify) {
-  ESP_LOG_BUFFER_HEX("my value", pData, length);  // valahol olvastam, igy működik valamiért
-  // server
+  ESP_LOG_BUFFER_HEX("my value", pData, length);  // valamiért csak így működik
+  unsigned long currentMillis = millis();
   if (deviceConnected) {
-    unsigned long currentMillis = millis();  // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
     if (currentMillis - previousMillis1 >= 10) {
       previousMillis1 = currentMillis;
       pCharacteristic->setValue(pData, length);
       pCharacteristic->notify();
     }
-  }
-  // disconnecting
-  if (!deviceConnected && oldDeviceConnected) {
-    unsigned long currentMillis = millis();
+  } else if (oldDeviceConnected) {
     if (currentMillis - previousMillis2 >= 500) {
-      previousMillis2 = currentMillis;  // give the bluetooth stack the chance to get things ready
-      pServer->startAdvertising();      // restart advertising
+      previousMillis2 = currentMillis;
+      pServer->startAdvertising();
       oldDeviceConnected = deviceConnected;
     }
-  }
-  // connecting
-  if (deviceConnected && !oldDeviceConnected) {
+  } else {
     oldDeviceConnected = deviceConnected;
   }
 
@@ -837,7 +849,6 @@ static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, ui
 
   adat = adattemp;  // valamiért csak így működik
 
-  unsigned long currentMillis = millis();
   if (currentMillis - startMillis >= ledChanelInterval) {
     dutyCycleLed = adat;
     if (erzekelo == 111) {
@@ -845,9 +856,7 @@ static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, ui
     } else if (erzekelo == 222) {
       dutyCycleLed = map(dutyCycleLed, 0, (ZONE_2 / 0.9), 1, 255);
     }
-    if (dutyCycleLed > 255) {  // hiba nem lehet 255-nél nagyobb
-      dutyCycleLed = 255;
-    }
+    dutyCycleLed = min(dutyCycleLed, static_cast<uint16_t>(255));
     ledcWrite(ledChannel, dutyCycleLed);
     startMillis = currentMillis;
   }
@@ -911,7 +920,9 @@ void ventillatorvezerles() {
           time_elapsedtimerele = millis();
           break;
         default:
+          digitalWrite(relayGPIOs[0], LOW);
           periodrele = kesleltetes0;
+          time_elapsedtimerele = millis();
           break;
       }
     }
@@ -971,79 +982,51 @@ void relek() {
 }
 
 void kiirzonak() {
-  if (stopServer == false)
-    WebSerial.print("Alapteljesitmeny: ");
-  if (stopServer == false)
-    WebSerial.print(alapteljesitmeny);
-  if (stopServer == false)
-    WebSerial.print(" Zona 1: ");
-  if (stopServer == false)
-    WebSerial.print(ZONE_1);
-  if (stopServer == false)
-    WebSerial.print(" Zona 2: ");
-  if (stopServer == false)
-    WebSerial.print(ZONE_2);
-  if (stopServer == false)
-    WebSerial.print(" sprintzona: ");
-  if (stopServer == false)
-    WebSerial.print(sprintzona);
-  if (stopServer == false)
-    WebSerial.println(" (watt/bpm) értékű.");
+  if (stopServer == false) {
+    kiir("Alapteljesitmeny: ", alapteljesitmeny);
+    kiir(" Zona 1: ", ZONE_1);
+    kiir(" Zona 2: ", ZONE_2);
+    kiir(" sprintzona: ", sprintzona);
+    WebSerial.println(" (watt/bpm) értékűek.");
+  }
 }
 
 void kiirkesleltetesek() {
-  if (stopServer == false)
-    WebSerial.print("A kesleltetes0: ");
-  if (stopServer == false)
-    WebSerial.print(kesleltetes0 / 1000);
-  if (stopServer == false)
-    WebSerial.print(" kesleltetes1 ");
-  if (stopServer == false)
-    WebSerial.print(kesleltetes1 / 1000);
-  if (stopServer == false)
-    WebSerial.print(" kesleltetes2: ");
-  if (stopServer == false)
-    WebSerial.print(kesleltetes2 / 1000);
-  if (stopServer == false)
-    WebSerial.print(" kesleltetes3: ");
-  if (stopServer == false)
-    WebSerial.print(kesleltetes3 / 1000);
-  if (stopServer == false)
-    WebSerial.print(" kesleltetessprint: ");
-  if (stopServer == false)
-    WebSerial.print(kesleltetessprint / 1000);
-  if (stopServer == false)
-    WebSerial.print(" kesleltetesend: ");
-  if (stopServer == false)
-    WebSerial.print(kesleltetesend / 1000);
-  if (stopServer == false)
-    WebSerial.print(" 'periodrele' valtozo erteke: ");
-  if (stopServer == false)
-    WebSerial.print(periodrele / 1000);
-  if (stopServer == false)
-    WebSerial.println(" másodperc értékű.");
+  if (stopServer == false) {
+    kiir("A kesleltetes0: ", kesleltetes0 / 1000);
+    kiir(" kesleltetes1 ", kesleltetes1 / 1000);
+    kiir(" kesleltetes2: ", kesleltetes2 / 1000);
+    kiir(" kesleltetes3: ", kesleltetes3 / 1000);
+    kiir(" kesleltetessprint: ", kesleltetessprint / 1000);
+    kiir(" kesleltetesend: ", kesleltetesend / 1000);
+    kiir(" 'periodrele' valtozo erteke: ", periodrele / 1000);
+    WebSerial.println(" ... másodperc értékűek.");
+  }
 }
 
 void kiiras() {
-  now = millis();
-  if (now - elapsedtime >= 2500) {
-    elapsedtime = now;
-    if (erzekelo == 222) {
-      kiir("Atlag teljesitmeny: ", teljesitmeny);
-      kiir(" Pillanatnyi teljesitmeny: ", adat);
-    }
-    if (erzekelo == 111) {
-      kiir("Atlag pulzus: ", teljesitmeny);
-      kiir(" Pillanatnyi pulzus: ", adat);
+  if (stopServer == false) {
+    now = millis();
+    if (now - elapsedtime >= 2500) {
+      elapsedtime = now;
+      if (erzekelo == 222) {
+        kiir("Atlag teljesitmeny: ", teljesitmeny);
+        kiir(" Pillanatnyi teljesitmeny: ", adat);
+      }
+      if (erzekelo == 111) {
+        kiir("Atlag pulzus: ", teljesitmeny);
+        kiir(" Pillanatnyi pulzus: ", adat);
+      }
+      if (releteszt == 1) {
+        WebSerial.println("A releteszt aktív!");
+      }
     }
   }
 }
 
 void kiir(String szoveg, uint16_t ertek) {
-  if (stopServer == false)
-    WebSerial.print(szoveg);
-  if (stopServer == false)
-    WebSerial.println(ertek);
+  WebSerial.print(szoveg);
+  WebSerial.println(ertek);
 }
 
 class MyClientCallback : public BLEClientCallbacks {
@@ -1344,12 +1327,12 @@ void print_wakeup_reason() {
 
 void click() {
   fct_WatchdogReset();
+  stopServer = false;
   fromBootCounter = 0;
   counterFromBoot.start();
   Serial.begin(115200);
   wifiOn();
-  wifiInterface();
-  stopServer = false;
+ //wifiInterface();
   ledPwmBlinking(1);
 }
 
@@ -1407,6 +1390,7 @@ void ledPwmBlinking(int blinkNumber) {
 }
 
 void fct_counterFromBoot() {
+
   if (fromBootCounter < 0)  // ha gond lenne
   {
     fromBootCounter = 0;
@@ -1427,7 +1411,7 @@ void fct_counterFromBoot() {
     stopServer = true;
     SPIFFS.end();
     Serial.end();
-    server.end();
+    //server.end();
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     counterFromBoot.stop();
@@ -1598,6 +1582,8 @@ void wifiInterface() {
   ElegantOTA.onStart(onOTAStart);
   ElegantOTA.onProgress(onOTAProgress);
   ElegantOTA.onEnd(onOTAEnd);
+  // Disable Auto Reboot
+  ElegantOTA.setAutoReboot(false);
   WebSerial.begin(&server);
   WebSerial.msgCallback(recvMsg);
   server.begin();
@@ -1636,8 +1622,7 @@ void setup() {
   delay(100);
   fct_goToSleep();
   watchDOG.start();
-  if (stopServer == false)
-    Serial.println("Start watchdog counter!");
+  Serial.println("Start watchdog counter!");
   ledUpdate.start();
   counterFromBoot.start();
   OnStateLedBleConnected.stop();
@@ -1650,21 +1635,17 @@ void setup() {
   wifiOn();
   wifiInterface();
   digitalWrite(relayEN, HIGH);  // relek engedelyezese
-  if (stopServer == false)
-    Serial.print("Hutesuzemmod aktív?: ");
-  if (stopServer == false)
-    Serial.println(hutesUzemmod);
+  stopServer = false;
+  Serial.print("Hutesuzemmod aktív?: ");
+  Serial.println(hutesUzemmod);
   if (hutesUzemmod < 0 || hutesUzemmod > 1 || teszteles < 0 || teszteles > 1 || kalibralas < 0 || kalibralas > 1) {
     kalibralas = 0;
     hutesUzemmod = 0;
     teszteles = 0;
-    if (stopServer == false)
-      Serial.println("hutesUzemmod/teszteles/kalibralas parameter hiba!");
+    Serial.println("hutesUzemmod/teszteles/kalibralas parameter hiba!");
   }
-  if (stopServer == false)
-    Serial.print("Tesztelés aktív?: ");
-  if (stopServer == false)
-    Serial.println(teszteles);
+  Serial.print("Tesztelés aktív?: ");
+  Serial.println(teszteles);
   if (teszteles == 0 && hutesUzemmod == 0 && kalibralas == 0)  // teszteleshez
   {
     blekliens();
@@ -1747,9 +1728,7 @@ void loop() {
           }
           atlagolas();
           ventillatorvezerles();
-          if (!stopServer) {
-            kiiras();
-          }
+          kiiras();
         } else if (doScan) {
           if (stopServer == false)
             Serial.println("Lecsatlakozott.");
@@ -1779,7 +1758,7 @@ void loop() {
 void loop2(void *pvParameter) {
 
   while (1) {
-    if (!stopServer) {
+    if (stopServer == false) {
       ElegantOTA.loop();
       ws.cleanupClients();
     }
