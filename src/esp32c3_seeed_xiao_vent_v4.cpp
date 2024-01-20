@@ -31,7 +31,7 @@ void allrelayoff();
 void setDelay(String d, String index, uint32_t &delay, uint16_t eepromAddress, uint32_t maxDelay);
 void setZone(String d, String index, uint16_t &zone, uint16_t eepromAddress, uint16_t minZone, uint16_t maxZone);
 void setVent(String d, String index, int relayIndex);
-void recvMsg(uint8_t *adat, size_t len);
+void recvMsg(uint8_t *dataWebserial, size_t len);
 static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify);
 void atlagolas();
 void ventillatorvezerles();
@@ -90,6 +90,7 @@ uint8_t teszteles = 0;
 uint8_t bootCounter = 0;
 RTC_DATA_ATTR int bootCount = 0;
 int elozoBootcount;
+uint16_t serverEnd = 600;
 
 #define BUTTON_PIN_BITMASK 0x200000000  // 2^33 in hex
 // const uint64_t WAKEUP_LOW_PIN_BITMASK = 0b001111;
@@ -97,7 +98,7 @@ int elozoBootcount;
 #define watchdogMinCounter 0
 static uint32_t watchdogCounter = watchdogMinCounter;
 uint32_t fromBootCounter = 0;
-uint32_t timetosleep = 600;  // ennyi ido utan sleep, masodperc
+uint32_t timetosleep = 1800;  // ennyi ido utan sleep, masodperc
 uint32_t forSleepTime = timetosleep;
 static uint8_t scanTime = 0;      // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
 static uint8_t intervallum = 10;  // ennyi atlagat veszi
@@ -559,14 +560,14 @@ void setVent(String d, String index, int relayIndex) {
   }
 }
 
-void recvMsg(uint8_t *adat, size_t len) {
+void recvMsg(uint8_t *dataWebserial, size_t len) {
   if (stopServer == false)
-    WebSerial.println("Received adat...");
+    WebSerial.println("Received data...");
   String d = "";
   inString = "";
   for (uint8_t i = 0; i < len; i++) {
-    d += char(adat[i]);
-    uint16_t incar = char(adat[i]);
+    d += char(dataWebserial[i]);
+    uint16_t incar = char(dataWebserial[i]);
     if (isDigit(incar)) {
       inString += (char)incar;
     }
@@ -1270,19 +1271,21 @@ void fct_Watchdog() {
   }
   watchdogCounter++;
   if (watchdogCounter == forSleepTime) {
-    digitalWrite(LED_wifi, LOW);
-    allrelayoff();  // relek kikapcsolása
-    digitalWrite(relayOutlet, HIGH);
-    digitalWrite(relayEN, LOW);
-    if (stopServer == false)
-      Serial.println("Minden rele ki!(watchdog)");
-    ledPwmBlinking(3);
-    if (stopServer == false)
-      Serial.println("Going to sleep now");
-    delay(500);
-    esp_deep_sleep_start();
-    if (stopServer == false)
-      Serial.println("This will never be printed");
+    if (adat == 0) {
+      digitalWrite(LED_wifi, LOW);
+      allrelayoff();  // relek kikapcsolása
+      digitalWrite(relayOutlet, HIGH);
+      digitalWrite(relayEN, LOW);
+      if (stopServer == false)
+        Serial.println("Minden rele ki!(watchdog)");
+      ledPwmBlinking(3);
+      if (stopServer == false)
+        Serial.println("Going to sleep now");
+      delay(500);
+      esp_deep_sleep_start();
+      if (stopServer == false)
+        Serial.println("This will never be printed");
+    }
   }
 }
 
@@ -1332,7 +1335,6 @@ void click() {
   counterFromBoot.start();
   Serial.begin(115200);
   wifiOn();
- //wifiInterface();
   ledPwmBlinking(1);
 }
 
@@ -1395,27 +1397,24 @@ void fct_counterFromBoot() {
   {
     fromBootCounter = 0;
   }
-  if (fromBootCounter < 300) {
+  if (fromBootCounter < serverEnd) {
     fromBootCounter++;
   }
   if (fromBootCounter == 10) {
     digitalWrite(relayOutlet, LOW);  // hosszabító bekapcsolása - edzogorgo felkapcsolasa
   }
-  if (fromBootCounter == 90 && (hutesUzemmod == 0 || teszteles == 0 || kalibralas == 0)) {
+  if (fromBootCounter == 90 && hutesUzemmod == 0 && teszteles == 0 && kalibralas == 0) {
     if (!connected) {
       digitalWrite(relayOutlet, HIGH);  // hosszabító lekapcsolása ha nincs bluetooth csatlakozas
     }
   }
-  if (fromBootCounter == 300 && (hutesUzemmod == 0 || teszteles == 0 || kalibralas == 0))  // webserver leállítása
+  if (fromBootCounter == serverEnd && hutesUzemmod == 0 && teszteles == 0 && kalibralas == 0)  // webserver leállítása
   {
     stopServer = true;
-    SPIFFS.end();
-    Serial.end();
-    //server.end();
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     counterFromBoot.stop();
-  } else if (fromBootCounter == 300 && (hutesUzemmod == 1 || teszteles == 1 || kalibralas == 1)) {
+  } else if (fromBootCounter == serverEnd && (hutesUzemmod == 1 || teszteles == 1 || kalibralas == 1)) {
     stopServer = false;
     counterFromBoot.stop();
   }
@@ -1763,7 +1762,7 @@ void loop2(void *pvParameter) {
       ws.cleanupClients();
     }
     watchDOG.update();
-    if (fromBootCounter < 300) {
+    if (fromBootCounter < serverEnd) {
       counterFromBoot.update();
     }
     ledUpdate.update();
