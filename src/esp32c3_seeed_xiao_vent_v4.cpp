@@ -80,67 +80,65 @@ TickTwo ledUpdate(fct_ledUpdate, 1000, 0, MILLIS);
 TickTwo OnStateLed(fct_OnStateLed, 50);
 TickTwo OnStateLedWithWifi(fct_OnStateLedWithWifi, 300);
 TickTwo OnStateLedBleConnected(fct_OnStateLedBleConnected, 900);
-bool ledStateOnstateLed;
-bool ledStateWifistateLed;
-bool stopServer = false;
-uint8_t reboot = 0;  // reboothoz hogy felébredjen ram-ban tárolom majd
-uint8_t hutesUzemmod = 0;
-uint8_t kalibralas = 0;
-uint8_t teszteles = 0;
-uint8_t bootCounter = 0;
+static boolean ledStateOnstateLed;
+static boolean ledStateWifistateLed;
+static boolean stopServer = false;
+static boolean reboot = false;  // reboothoz hogy felébredjen ram-ban tárolom majd
+static boolean hutesUzemmod = false;
+static boolean kalibralas = false;
+static boolean teszteles = false;
+static uint8_t bootCounter = 0;
 RTC_DATA_ATTR int bootCount = 0;
-int elozoBootcount;
-uint16_t serverEnd = 600;
+const uint16_t serverEnd = 600;
 
 #define BUTTON_PIN_BITMASK 0x200000000  // 2^33 in hex
 // const uint64_t WAKEUP_LOW_PIN_BITMASK = 0b001111;
 
 #define watchdogMinCounter 0
 static uint32_t watchdogCounter = watchdogMinCounter;
-uint32_t fromBootCounter = 0;
-uint32_t timetosleep = 1800;  // ennyi ido utan sleep, masodperc
-uint32_t forSleepTime = timetosleep;
-static uint8_t scanTime = 0;      // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
-static uint8_t intervallum = 10;  // ennyi atlagat veszi
-uint8_t szamlalo = intervallum;   // a kezdőértéke az intervallum
-uint16_t adattemp;
-uint16_t teljesitmenytemp;
-uint16_t teljesitmeny;
-uint16_t elozoTeljesitmenyzona = 0;
-uint8_t teljesitmenyzona = 0;
-uint16_t adat;
-uint16_t watt;
+static uint32_t fromBootCounter = 0;
+const uint32_t timetosleep = 1800;  // ennyi ido utan sleep, masodperc
+static uint32_t forSleepTime = timetosleep;
+static uint8_t scanTime = 0;            // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
+const uint8_t intervallum = 10;        // ennyi atlagat veszi
+static uint8_t szamlalo = intervallum;  // a kezdőértéke az intervallum
+static uint16_t adattemp;
+static uint16_t teljesitmenytemp;
+static uint16_t teljesitmeny;
+static uint16_t elozoTeljesitmenyzona = 0;
+static uint8_t teljesitmenyzona = 0;
+static uint16_t adat;
 
 uint16_t randNumber;
 
-uint8_t vent = 1;
-uint8_t reset = 0;
-uint32_t erzekelo;
-static uint16_t memoria_meret = 200;  // használt memória mérete
-unsigned long time_now;
-unsigned long time_nowrele;
-unsigned long time_elapsedtime = 0;
-unsigned long time_elapsedtimerele = 0;
-unsigned long time_elapsedtime_elozoTeljesitmenyzona = 0;
-unsigned long now;
+static boolean vent = true;
+static boolean reset = false;
+static uint32_t erzekelo;
+const uint16_t memoria_meret = 200;  // használt memória mérete
+static unsigned long time_now;
+static unsigned long time_nowrele;
+static unsigned long time_elapsedtime = 0;
+static unsigned long time_elapsedtimerele = 0;
+static unsigned long time_elapsedtime_elozoTeljesitmenyzona = 0;
+static unsigned long now;
 unsigned long elapsedtime = 0;
-uint16_t period = 1000;  // a loop masodpercenkent egyszer fut
-uint32_t periodrele = 0;
-uint8_t releteszt = 0;
-unsigned long previousMillis1 = 0;
-unsigned long previousMillis2 = 0;
-unsigned long time_now_click;
-unsigned long startMillis;         // LED_wifi pwm írásának utolsó idelye
-uint16_t ledChanelInterval = 125;  // LED_wifi pwm periódusa
-uint32_t kesleltetesend;
-uint32_t kesleltetes0;
-uint32_t kesleltetes1;
-uint32_t kesleltetes2;
-uint32_t kesleltetes3;
-uint32_t kesleltetessprint;
-char welcome[] = "Hello! Ezen az IP cimen az ESP32 ventillator vezerlo mukodik!. Webserial: IP/webserial. ";
-char help1[] = "Parancsok: help, reset, wifireset, off, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off, vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(watt/bpm), alapteljesitmeny(watt/bpm), elsozona(watt/bpm), masodikzona(watt/bpm), zonak? ";
-char help2[] = ",kesleltetesnulla(masodperc), kesleltetesegy(masodperc), kesleltetesketto(masodperc), kesleltetesharom(masodperc), kesleltetessprint(masodperc), kesleltetesend(masodperc), kesleltetesek?, hutesuzemmodbe, hutesuzemmodki, kalibralasbe, kalibralaski ";
+const uint16_t period = 1000;  // a loop masodpercenkent egyszer fut
+static uint32_t periodrele = 0;
+static boolean releteszt = false;
+static unsigned long previousMillis1 = 0;
+static unsigned long previousMillis2 = 0;
+static unsigned long time_now_click;
+static unsigned long startMillis;         // LED_wifi pwm írásának utolsó idelye
+const uint16_t ledChanelInterval = 125;  // LED_wifi pwm periódusa
+static uint32_t kesleltetesend;
+static uint32_t kesleltetes0;
+static uint32_t kesleltetes1;
+static uint32_t kesleltetes2;
+static uint32_t kesleltetes3;
+static uint32_t kesleltetessprint;
+const char welcome[] = "Hello! Ezen az IP cimen az ESP32 ventillator vezerlo mukodik!. Webserial: IP/webserial. ";
+const char help1[] = "Parancsok: help, reset, wifireset, off, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off, vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(watt/bpm), alapteljesitmeny(watt/bpm), elsozona(watt/bpm), masodikzona(watt/bpm), zonak? ";
+const char help2[] = ",kesleltetesnulla(masodperc), kesleltetesegy(masodperc), kesleltetesketto(masodperc), kesleltetesharom(masodperc), kesleltetessprint(masodperc), kesleltetesend(masodperc), kesleltetesek?, hutesuzemmodbe, hutesuzemmodki, kalibralasbe, kalibralaski ";
 String inString = "";
 
 byte delta[8] = {  // LCD-hez, delta jel
@@ -157,17 +155,17 @@ byte delta[8] = {  // LCD-hez, delta jel
 // Set number of outputs
 #define NUM_OUTPUTS 4
 // Assign each GPIO to an output
-uint8_t outputGPIOs[NUM_OUTPUTS] = { 10, 9, 8, 2 };
+const uint8_t outputGPIOs[NUM_OUTPUTS] = { 10, 9, 8, 2 };
 
 #define RELAY_NO true
-#define NUM_RELAYS 3                            // hany darab rele
-uint8_t relayGPIOs[NUM_RELAYS] = { 10, 9, 8 };  // relekimenetek
-#define relayOutlet 2                           // kulso aljzat
+#define NUM_RELAYS 3                                   // hany darab rele
+const uint8_t relayGPIOs[NUM_RELAYS] = { 10, 9, 8 };  // relekimenetek
+#define relayOutlet 2                                  // kulso aljzat
 #define relayEN 21
-uint16_t ZONE_1;  // ventillator 2. fokozat
-uint16_t ZONE_2;  // ventillator 3. fokozat
-uint16_t sprintzona;
-uint16_t alapteljesitmeny;
+static uint16_t ZONE_1;  // ventillator 2. fokozat
+static uint16_t ZONE_2;  // ventillator 3. fokozat
+static uint16_t sprintzona;
+static uint16_t alapteljesitmeny;
 
 BLEUUID serviceerzekeloUUID;
 BLEUUID charerzekeloUUID;
@@ -193,7 +191,7 @@ bool oldDeviceConnected = false;
 
 #define LED_wifi 5    // wifi hiba
 #define LED_eeprom 4  // eeprom hiba
-uint16_t dutyCycleLed;
+static uint16_t dutyCycleLed;
 // setting PWM properties
 const uint32_t freq = 5000;
 const uint8_t ledChannel = 0;
@@ -207,7 +205,7 @@ AsyncWebServer server(80);
 // Create a WebSocket object
 AsyncWebSocket ws("/ws");
 
-unsigned long ota_progress_millis = 0;
+static unsigned long ota_progress_millis = 0;
 
 // Search for parameter in HTTP POST request
 const char *PARAM_INPUT_1 = "ssid";
@@ -235,7 +233,7 @@ IPAddress localGateway;
 IPAddress subnet(255, 255, 0, 0);
 
 // Timer variables
-unsigned long previousMillis = 0;
+static unsigned long previousMillis = 0;
 const long interval = 60000;  // interval to wait for Wi-Fi connection (milliseconds)
 
 // Set LED GPIO
@@ -276,9 +274,9 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       if (gpio == outputGPIOs[0]) {
         digitalWrite(gpio, !digitalRead(gpio));
         if (digitalRead(gpio)) {
-          releteszt = 0;
+          releteszt = false;
         } else {
-          releteszt = 1;
+          releteszt = true;
         }
         if (!digitalRead(gpio)) {
           digitalWrite(outputGPIOs[1], HIGH);
@@ -288,9 +286,9 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       if (gpio == outputGPIOs[1]) {
         digitalWrite(gpio, !digitalRead(gpio));
         if (digitalRead(gpio)) {
-          releteszt = 0;
+          releteszt = false;
         } else {
-          releteszt = 1;
+          releteszt = true;
         }
         if (!digitalRead(gpio)) {
           digitalWrite(outputGPIOs[0], HIGH);
@@ -300,9 +298,9 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       if (gpio == outputGPIOs[2]) {
         digitalWrite(gpio, !digitalRead(gpio));
         if (digitalRead(gpio)) {
-          releteszt = 0;
+          releteszt = false;
         } else {
-          releteszt = 1;
+          releteszt = true;
         }
         if (!digitalRead(gpio)) {
           digitalWrite(outputGPIOs[0], HIGH);
@@ -542,8 +540,8 @@ void setZone(String d, String index, uint16_t &zone, uint16_t eepromAddress, uin
 
 void setVent(String d, String index, int relayIndex) {
   if (d.indexOf(index) >= 0) {
-    if (d == index + "on" && vent == 1) {
-      releteszt = 1;
+    if (d == index + "on" && vent) {
+      releteszt = true;
       teljesitmenyzona = 0;
     }
     for (uint8_t e = 1; e <= NUM_RELAYS; e++) {
@@ -552,10 +550,10 @@ void setVent(String d, String index, int relayIndex) {
     digitalWrite(relayGPIOs[relayIndex], LOW);
   }
   if (d == index + "off") {
-    releteszt = 0;
+    releteszt = false;
     teljesitmenyzona = 0;
-    vent = 0;
-    releteszt = 1;
+    vent = false;
+    releteszt = true;
     allrelayoff();
   }
 }
@@ -600,8 +598,8 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
   if (d == "ventoff") {
     if (stopServer == false)
       WebSerial.println("Ventillatorok kikapcsolva.");
-    vent = 0;
-    releteszt = 0;
+    vent = false;
+    releteszt = false;
     allrelayoff();
   }
   if (d == "venton") {
@@ -609,17 +607,17 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
       WebSerial.println("Ventillatorok visszakapcsolva.");
     elozoTeljesitmenyzona = 0;
     periodrele = 0;
-    releteszt = 0;
-    vent = 1;
+    releteszt = false;
+    vent = true;
   }
   if (d == "reboot") {
     ledPwmBlinking(3);
     rebootEsp();
   }
   if (d == "teszt") {
-    teszteles = 1;
-    hutesUzemmod = 0;
-    kalibralas = 0;
+    teszteles = true;
+    hutesUzemmod = false;
+    kalibralas = false;
     bootCounter = 2;
     EEPROM.put(150, kalibralas);
     eeprom_commit();
@@ -633,7 +631,7 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
     rebootEsp();
   }
   if (d == "run") {
-    teszteles = 0;
+    teszteles = false;
     bootCounter = 0;
     EEPROM.put(90, teszteles);
     eeprom_commit();
@@ -643,11 +641,11 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
     rebootEsp();
   }
   if (d == "reset") {
-    reset = 1;
+    reset = true;
     eeprom_check();
     eeprom_valid();
     readeepromparameter();
-    reset = 0;
+    reset = false;
     ledPwmBlinking(3);
     rebootEsp();
   }
@@ -681,9 +679,9 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
       WebSerial.println("LCD OFF!");
   }
   if (d == "hutesuzemmodbe") {
-    hutesUzemmod = 1;
-    kalibralas = 0;
-    teszteles = 0;
+    hutesUzemmod = true;
+    kalibralas = false;
+    teszteles = false;
     bootCounter = 2;
     EEPROM.put(90, teszteles);
     eeprom_commit();
@@ -697,7 +695,7 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
     rebootEsp();
   }
   if (d == "hutesuzemmodki") {
-    hutesUzemmod = 0;
+    hutesUzemmod = false;
     bootCounter = 0;
     EEPROM.put(140, hutesUzemmod);
     eeprom_commit();
@@ -707,9 +705,9 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
     rebootEsp();
   }
   if (d == "kalibralasbe") {
-    kalibralas = 1;
-    hutesUzemmod = 0;
-    teszteles = 0;
+    kalibralas = true;
+    hutesUzemmod = false;
+    teszteles = false;
     bootCounter = 2;
     EEPROM.put(90, teszteles);
     eeprom_commit();
@@ -723,7 +721,7 @@ void recvMsg(uint8_t *dataWebserial, size_t len) {
     rebootEsp();
   }
   if (d == "kalibralaski") {
-    kalibralas = 0;
+    kalibralas = false;
     bootCounter = 0;
     EEPROM.put(150, kalibralas);
     eeprom_commit();
@@ -881,7 +879,7 @@ void atlagolas() {
 
 void ventillatorvezerles() {
 
-  if (releteszt == 0 && vent == 1) {
+  if (!releteszt && vent) {
     if (teljesitmeny == 0 || teljesitmeny < alapteljesitmeny) {
       teljesitmenyzona = 0;
     } else if (teljesitmeny < ZONE_1 && teljesitmeny > alapteljesitmeny) {  // ne kapcsoljon be ha picit megforgatom a hajtóművet pl. láncolajozás
@@ -949,7 +947,7 @@ void ventillatorvezerles() {
 }
 
 void relek() {
-  if (vent == 1 && releteszt == 0) {
+  if (vent && !releteszt) {
     time_nowrele = millis();
     if (time_nowrele - time_elapsedtimerele >= periodrele) {
       time_elapsedtimerele = time_nowrele;
@@ -1018,7 +1016,7 @@ void kiiras() {
         kiir("Atlag pulzus: ", teljesitmeny);
         kiir(" Pillanatnyi pulzus: ", adat);
       }
-      if (releteszt == 1) {
+      if (releteszt) {
         WebSerial.println("A releteszt aktív!");
       }
     }
@@ -1121,8 +1119,8 @@ class MyServerCallbacks : public BLEServerCallbacks {
 };
 
 void eeprom_check() {
-  if (EEPROM.read(0) != 0x55 || reset == 1) {
-    if (reset == 0) {  // mivel ha nem en kezdemenyztem akkor gond van
+  if (EEPROM.read(0) != 0x55 || reset) {
+    if (!reset) {  // mivel ha nem en kezdemenyztem akkor gond van
       ledPwmBlinking(4);
     }
     if (stopServer == false)
@@ -1156,7 +1154,7 @@ void eeprom_commit() {
 
 void checkAndReset(int value, uint32_t defaultValue, uint16_t address, const char *name) {
   uint32_t upperLimit = 600000;
-  if (reset == 1 || value < 0 || value > upperLimit || ZONE_1 == 0 || ZONE_2 == 0 || sprintzona == 0 || erzekelo == 0 || kesleltetes2 == 0 || kesleltetes3 == 0 || kesleltetessprint == 0 || kesleltetesend == 0)  // szuroprobaszeruen megnez par erteket eeprom.check utan
+  if (reset || value < 0 || value > upperLimit || ZONE_1 == 0 || ZONE_2 == 0 || sprintzona == 0 || erzekelo == 0 || kesleltetes2 == 0 || kesleltetes3 == 0 || kesleltetessprint == 0 || kesleltetesend == 0)  // szuroprobaszeruen megnez par erteket eeprom.check utan
   {
     value = defaultValue;
     EEPROM.put(address, value);
@@ -1179,12 +1177,12 @@ void eeprom_valid() {
   checkAndReset(kesleltetes2, 35500, 60, "kesleltetes2");
   checkAndReset(kesleltetes3, 55500, 70, "kesleltetes3");
   checkAndReset(kesleltetessprint, 65500, 80, "kesleltetessprint");
-  checkAndReset(teszteles, 0, 90, "teszteles");
+  checkAndReset(teszteles, false, 90, "teszteles");
   checkAndReset(kesleltetesend, 300000, 110, "kesleltetesend");
   checkAndReset(erzekelo, 222, 120, "erzekelo");
-  checkAndReset(reboot, 0, 130, "reboot");
-  checkAndReset(hutesUzemmod, 0, 140, "hutesUzemmod");
-  checkAndReset(kalibralas, 0, 150, "kalibralas");
+  checkAndReset(reboot, false, 130, "reboot");
+  checkAndReset(hutesUzemmod, false, 140, "hutesUzemmod");
+  checkAndReset(kalibralas, false, 150, "kalibralas");
   checkAndReset(bootCounter, 0, 160, "bootCounter");
 }
 
@@ -1403,18 +1401,18 @@ void fct_counterFromBoot() {
   if (fromBootCounter == 10) {
     digitalWrite(relayOutlet, LOW);  // hosszabító bekapcsolása - edzogorgo felkapcsolasa
   }
-  if (fromBootCounter == 90 && hutesUzemmod == 0 && teszteles == 0 && kalibralas == 0) {
+  if (fromBootCounter == 90 && !hutesUzemmod && !teszteles && !kalibralas) {
     if (!connected) {
       digitalWrite(relayOutlet, HIGH);  // hosszabító lekapcsolása ha nincs bluetooth csatlakozas
     }
   }
-  if (fromBootCounter == serverEnd && hutesUzemmod == 0 && teszteles == 0 && kalibralas == 0)  // webserver leállítása
+  if (fromBootCounter == serverEnd && !hutesUzemmod && !teszteles && !kalibralas)  // webserver leállítása
   {
     stopServer = true;
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     counterFromBoot.stop();
-  } else if (fromBootCounter == serverEnd && (hutesUzemmod == 1 || teszteles == 1 || kalibralas == 1)) {
+  } else if (fromBootCounter == serverEnd && (hutesUzemmod || teszteles || kalibralas)) {
     stopServer = false;
     counterFromBoot.stop();
   }
@@ -1434,9 +1432,9 @@ void fct_goToSleep() {
     EEPROM.put(160, bootCounter);
     eeprom_commit();
     if (bootCounter == 0) {
-      teszteles = 0;
-      hutesUzemmod = 0;
-      kalibralas = 0;
+      teszteles = false;
+      hutesUzemmod = false;
+      kalibralas = false;
       EEPROM.put(90, teszteles);
       eeprom_commit();
       EEPROM.put(150, kalibralas);
@@ -1447,7 +1445,7 @@ void fct_goToSleep() {
       eeprom_commit();
     }
   }
-  if (reboot == 0) {
+  if (!reboot) {
     esp_sleep_wakeup_cause_t cause;
     cause = esp_sleep_get_wakeup_cause();
     if (stopServer == false)
@@ -1469,15 +1467,15 @@ void fct_goToSleep() {
         break;
     }
   }
-  if (reboot == 1) {
-    reboot = 0;
+  if (reboot) {
+    reboot = false;
     EEPROM.put(130, reboot);
     eeprom_commit();
   }
 }
 
 void rebootEsp() {
-  reboot = 1;
+  reboot = true;
   EEPROM.put(130, reboot);
   eeprom_commit();
   delay(100);
@@ -1638,14 +1636,16 @@ void setup() {
   Serial.print("Hutesuzemmod aktív?: ");
   Serial.println(hutesUzemmod);
   if (hutesUzemmod < 0 || hutesUzemmod > 1 || teszteles < 0 || teszteles > 1 || kalibralas < 0 || kalibralas > 1) {
-    kalibralas = 0;
-    hutesUzemmod = 0;
-    teszteles = 0;
+    kalibralas = false;
+    hutesUzemmod = false;
+    EEPROM.put(140, hutesUzemmod);
+    eeprom_commit();
+    teszteles = false;
     Serial.println("hutesUzemmod/teszteles/kalibralas parameter hiba!");
   }
   Serial.print("Tesztelés aktív?: ");
   Serial.println(teszteles);
-  if (teszteles == 0 && hutesUzemmod == 0 && kalibralas == 0)  // teszteleshez
+  if (!teszteles && !hutesUzemmod && !kalibralas)  // teszteleshez
   {
     blekliens();
     if (erzekelo == 111) {
@@ -1667,24 +1667,26 @@ void loop() {
   if (time_now - time_elapsedtime >= period) {
     time_elapsedtime = time_now;
     if (kalibralas < 0 || kalibralas > 1) {
-      kalibralas = 0;
+      kalibralas = false;
       if (stopServer == false)
         Serial.println("kalibralas parameter hiba!");
     }
-    if (kalibralas == 0) {
+    if (!kalibralas) {
       if (hutesUzemmod < 0 || hutesUzemmod > 1) {
-        hutesUzemmod = 0;
+        hutesUzemmod = false;
+        EEPROM.put(140, hutesUzemmod);
+        eeprom_commit();
         if (stopServer == false)
           Serial.println("hutesUzemmod parameter hiba!");
       }
-      if (hutesUzemmod == 0) {
+      if (!hutesUzemmod) {
         if (teszteles < 0 || teszteles > 1) {
-          teszteles = 0;
+          teszteles = false;
           if (stopServer == false)
             Serial.println("teszteles parameter hiba!");
         }
         readeepromparameter();
-        if (teszteles == 1) {
+        if (teszteles) {
           if (stopServer == false)
             WebSerial.println("Vigyazz! A Teszt mod aktiv! (webserial: run)");
           connected = true;
@@ -1737,7 +1739,7 @@ void loop() {
           BLEDevice::getScan()->start(0);  // ha lecsatlakozott ujra keresd folyamatosan
           allrelayoff();
         }
-      } else if (hutesUzemmod == 1) {
+      } else if (hutesUzemmod) {
         if (stopServer == false)
           Serial.println("Hutes-uzemmod aktiv.");
         if (stopServer == false)
@@ -1745,7 +1747,7 @@ void loop() {
         fct_WatchdogReset();
       }
 
-    } else if (kalibralas == 1) {
+    } else if (kalibralas) {
       if (stopServer == false)
         Serial.println("Kalibralas-uzemmod aktiv.");
       if (stopServer == false)
