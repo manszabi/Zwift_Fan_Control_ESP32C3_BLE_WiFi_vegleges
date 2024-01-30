@@ -94,13 +94,11 @@ const uint16_t serverEnd = 600;
 #define BUTTON_PIN_BITMASK 0x200000000  // 2^33 in hex
 // const uint64_t WAKEUP_LOW_PIN_BITMASK = 0b001111;
 
-#define watchdogMinCounter 0
-static uint32_t watchdogCounter = watchdogMinCounter;
+static uint32_t watchdogCounter = 0;
 static uint32_t fromBootCounter = 0;
-const uint32_t timetosleep = 1800;  // ennyi ido utan sleep, masodperc
-static uint32_t forSleepTime = timetosleep;
-static uint8_t scanTime = 0;            // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
-const uint8_t intervallum = 10;        // ennyi atlagat veszi
+const uint32_t timetosleep = 1800;      // ennyi ido utan sleep, masodperc
+const uint8_t scanTime = 30;            // meddig szkennelje az eszkozoket bekapcsolaskor, 0 akkor folyamatosan
+const uint8_t intervallum = 10;         // ennyi atlagat veszi
 static uint8_t szamlalo = intervallum;  // a kezdőértéke az intervallum
 static uint16_t adattemp;
 static uint16_t teljesitmenytemp;
@@ -109,7 +107,7 @@ static uint16_t elozoTeljesitmenyzona = 0;
 static uint8_t teljesitmenyzona = 0;
 static uint16_t adat;
 
-uint16_t randNumber;
+static uint16_t randNumber;
 
 static boolean vent = true;
 static boolean reset = false;
@@ -121,14 +119,14 @@ static unsigned long time_elapsedtime = 0;
 static unsigned long time_elapsedtimerele = 0;
 static unsigned long time_elapsedtime_elozoTeljesitmenyzona = 0;
 static unsigned long now;
-unsigned long elapsedtime = 0;
+static unsigned long elapsedtime = 0;
 const uint16_t period = 1000;  // a loop masodpercenkent egyszer fut
 static uint32_t periodrele = 0;
 static boolean releteszt = false;
 static unsigned long previousMillis1 = 0;
 static unsigned long previousMillis2 = 0;
 static unsigned long time_now_click;
-static unsigned long startMillis;         // LED_wifi pwm írásának utolsó idelye
+static unsigned long startMillis;        // LED_wifi pwm írásának utolsó idelye
 const uint16_t ledChanelInterval = 125;  // LED_wifi pwm periódusa
 static uint32_t kesleltetesend;
 static uint32_t kesleltetes0;
@@ -158,9 +156,9 @@ byte delta[8] = {  // LCD-hez, delta jel
 const uint8_t outputGPIOs[NUM_OUTPUTS] = { 10, 9, 8, 2 };
 
 #define RELAY_NO true
-#define NUM_RELAYS 3                                   // hany darab rele
+#define NUM_RELAYS 3                                  // hany darab rele
 const uint8_t relayGPIOs[NUM_RELAYS] = { 10, 9, 8 };  // relekimenetek
-#define relayOutlet 2                                  // kulso aljzat
+#define relayOutlet 2                                 // kulso aljzat
 #define relayEN 21
 static uint16_t ZONE_1;  // ventillator 2. fokozat
 static uint16_t ZONE_2;  // ventillator 3. fokozat
@@ -469,7 +467,6 @@ String processor(const String &var) {
 }
 
 void alapparameter() {
-  forSleepTime = timetosleep;
   periodrele = 0;
   connected = false;
   notification = false;
@@ -879,6 +876,10 @@ void atlagolas() {
 
 void ventillatorvezerles() {
 
+  if (teljesitmeny > 0 && !teszteles) {
+    fct_WatchdogReset;
+  }
+
   if (!releteszt && vent) {
     if (teljesitmeny == 0 || teljesitmeny < alapteljesitmeny) {
       teljesitmenyzona = 0;
@@ -1019,6 +1020,7 @@ void kiiras() {
       if (releteszt) {
         WebSerial.println("A releteszt aktív!");
       }
+      kiir("Watchdog számláló: ", watchdogCounter);
     }
   }
 }
@@ -1263,13 +1265,13 @@ void fct_ledUpdate() {
 }
 
 void fct_Watchdog() {
-  if (watchdogCounter < 0 || watchdogCounter > forSleepTime)  // ha gond lenne, ill ha adat == 0
+  if (watchdogCounter < 0 || watchdogCounter > timetosleep)  // ha gond lenne, ill ha adat == 0
   {
     watchdogCounter = 0;  // watchdogreset
   }
   watchdogCounter++;
-  if (watchdogCounter == forSleepTime) {
-    if (adat == 0) {
+  if (watchdogCounter == timetosleep) {
+    if (teljesitmeny == 0) {
       digitalWrite(LED_wifi, LOW);
       allrelayoff();  // relek kikapcsolása
       digitalWrite(relayOutlet, HIGH);
@@ -1288,7 +1290,7 @@ void fct_Watchdog() {
 }
 
 void fct_WatchdogReset() {
-  watchdogCounter = watchdogMinCounter;
+  watchdogCounter = 0;
   if (stopServer == false)
     Serial.println("WatchdogReset!");
 }
@@ -1398,7 +1400,7 @@ void fct_counterFromBoot() {
   if (fromBootCounter < serverEnd) {
     fromBootCounter++;
   }
-  if (fromBootCounter == 10) {
+  if (fromBootCounter == 5) {
     digitalWrite(relayOutlet, LOW);  // hosszabító bekapcsolása - edzogorgo felkapcsolasa
   }
   if (fromBootCounter == 90 && !hutesUzemmod && !teszteles && !kalibralas) {
@@ -1720,12 +1722,8 @@ void loop() {
             notification = true;
           }
           digitalWrite(relayOutlet, LOW);  // hosszabító bekapcsolása
-          if (adat > 0) {
-            if (!teszteles) {
-              fct_WatchdogReset();
-            }
-          } else if (adat == 0) {
-            forSleepTime = timetosleep * 2;
+          if (teljesitmeny > 0 && !teszteles) {
+            fct_WatchdogReset();
           }
           atlagolas();
           ventillatorvezerles();
@@ -1736,8 +1734,7 @@ void loop() {
           if (stopServer == false)
             Serial.println("Minden rele ki! Lecsatlakozas utan. ");
           alapparameter();
-          BLEDevice::getScan()->start(0);  // ha lecsatlakozott ujra keresd folyamatosan
-          allrelayoff();
+          BLEDevice::getScan()->start(120);  // ha lecsatlakozott ujra keres
         }
       } else if (hutesUzemmod) {
         if (stopServer == false)
