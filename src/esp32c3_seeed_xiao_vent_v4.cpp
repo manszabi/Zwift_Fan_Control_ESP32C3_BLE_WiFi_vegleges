@@ -330,9 +330,7 @@ void onOTAEnd(bool success) {
       Serial.println("There was an error during OTA update!");
   }
   // <Add your own code here>
-  unsigned long timeNowonOTAEnd = millis();
-  while (millis() < timeNowonOTAEnd + 2000) {
-  }
+  delay(2000);
   rebootEsp();
 }
 
@@ -799,7 +797,7 @@ static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, ui
     data = (pData[3] << 8) | pData[2];  // konvertalas egesz szamma
   }
 
-  if (erzekelo == 111) {
+  if (erzekelo == 111 && length >= 2) {
     adattemp = pData[1];  // heart_rate
   } else if (erzekelo == 222) {
     adattemp = data;  // power_watt
@@ -901,9 +899,7 @@ void ventillatorvezerles() {
 
     elozoTeljesitmenyzona = teljesitmenyzona;
 
-    unsigned long timeNowRelekElott = millis();
-    while (millis() < timeNowRelekElott + 100) {
-    }
+    delay(100);
 
     relek();
   }
