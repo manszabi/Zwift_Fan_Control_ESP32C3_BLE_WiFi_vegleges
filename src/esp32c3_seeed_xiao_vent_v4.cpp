@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <Wire.h>
 #include <BLEServer.h>
 #include <BLEDevice.h>
 #include <WiFi.h>
@@ -91,7 +90,6 @@ static uint8_t bootCounter = 0;
 RTC_DATA_ATTR int bootCount = 0;
 const uint16_t serverEnd = 600;
 
-#define BUTTON_PIN_BITMASK 0x200000000  // 2^33 in hex
 // const uint64_t WAKEUP_LOW_PIN_BITMASK = 0b001111;
 
 static uint32_t watchdogCounter = 0;
@@ -117,7 +115,6 @@ static unsigned long time_now;
 static unsigned long time_nowrele;
 static unsigned long time_elapsedtime = 0;
 static unsigned long time_elapsedtimerele = 0;
-static unsigned long time_elapsedtime_elozoTeljesitmenyzona = 0;
 static unsigned long now;
 static unsigned long elapsedtime = 0;
 const uint16_t period = 1000;  // a loop masodpercenkent egyszer fut
@@ -134,21 +131,9 @@ static uint32_t kesleltetes1;
 static uint32_t kesleltetes2;
 static uint32_t kesleltetes3;
 static uint32_t kesleltetessprint;
-const char welcome[] = "Hello! Ezen az IP cimen az ESP32 ventillator vezerlo mukodik!. Webserial: IP/webserial. ";
 const char help1[] = "Parancsok: help, reset, wifireset, off, lcdon, lcdoff, run, teszt, reboot, venton, ventoff, vent1on, vent1off, vent2on, vent2off, vent3on, vent3off, mymaxheartrate, myftp, erzekeloheart, erzekelopower, milyenerzekelo, sprintzona(watt/bpm), alapteljesitmeny(watt/bpm), elsozona(watt/bpm), masodikzona(watt/bpm), zonak? ";
 const char help2[] = ",kesleltetesnulla(masodperc), kesleltetesegy(masodperc), kesleltetesketto(masodperc), kesleltetesharom(masodperc), kesleltetessprint(masodperc), kesleltetesend(masodperc), kesleltetesek?, hutesuzemmodbe, hutesuzemmodki, kalibralasbe, kalibralaski ";
 String inString = "";
-
-byte delta[8] = {  // LCD-hez, delta jel
-  0b00100,
-  0b00100,
-  0b01010,
-  0b01010,
-  0b11011,
-  0b10001,
-  0b10001,
-  0b11111
-};
 
 // Set number of outputs
 #define NUM_OUTPUTS 4
@@ -172,8 +157,6 @@ BLEUUID charerzekeloUUID;
 #define SERVICE2_UUID (BLEUUID((uint16_t)0x1818))  // power
 #define CHARACTERISTIC2_UUID (BLEUUID((uint16_t)0x2A63))
 
-BLEDescriptor *pDescr;
-BLE2902 *pBLE2902;
 // BLECharacteristic* pCharacteristic;
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
@@ -269,40 +252,18 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       notifyClients(getOutputStates());
     } else {
       int gpio = atoi((char *)data);
-      if (gpio == outputGPIOs[0]) {
-        digitalWrite(gpio, !digitalRead(gpio));
-        if (digitalRead(gpio)) {
-          releteszt = false;
-        } else {
-          releteszt = true;
-        }
-        if (!digitalRead(gpio)) {
-          digitalWrite(outputGPIOs[1], HIGH);
-          digitalWrite(outputGPIOs[2], HIGH);
-        }
-      }
-      if (gpio == outputGPIOs[1]) {
-        digitalWrite(gpio, !digitalRead(gpio));
-        if (digitalRead(gpio)) {
-          releteszt = false;
-        } else {
-          releteszt = true;
-        }
-        if (!digitalRead(gpio)) {
-          digitalWrite(outputGPIOs[0], HIGH);
-          digitalWrite(outputGPIOs[2], HIGH);
-        }
-      }
-      if (gpio == outputGPIOs[2]) {
-        digitalWrite(gpio, !digitalRead(gpio));
-        if (digitalRead(gpio)) {
-          releteszt = false;
-        } else {
-          releteszt = true;
-        }
-        if (!digitalRead(gpio)) {
-          digitalWrite(outputGPIOs[0], HIGH);
-          digitalWrite(outputGPIOs[1], HIGH);
+      for (int idx = 0; idx < 3; idx++) {
+        if (gpio == outputGPIOs[idx]) {
+          digitalWrite(gpio, !digitalRead(gpio));
+          releteszt = !digitalRead(gpio);
+          if (!digitalRead(gpio)) {
+            for (int other = 0; other < 3; other++) {
+              if (other != idx) {
+                digitalWrite(outputGPIOs[other], HIGH);
+              }
+            }
+          }
+          break;
         }
       }
       if (gpio == outputGPIOs[3]) {
@@ -388,9 +349,8 @@ String readFile(fs::FS &fs, const char *path) {
   }
 
   String fileContent;
-  while (file.available()) {
+  if (file.available()) {
     fileContent = file.readStringUntil('\n');
-    break;
   }
   return fileContent;
 }
@@ -550,7 +510,6 @@ void setVent(String d, String index, int relayIndex) {
     releteszt = false;
     teljesitmenyzona = 0;
     vent = false;
-    releteszt = true;
     allrelayoff();
   }
 }
@@ -835,7 +794,10 @@ static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, ui
     oldDeviceConnected = deviceConnected;
   }
 
-  uint16_t data = (pData[3] << 8) | pData[2];  // konvertalas egesz szamma
+  uint16_t data = 0;
+  if (length >= 4) {
+    data = (pData[3] << 8) | pData[2];  // konvertalas egesz szamma
+  }
 
   if (erzekelo == 111) {
     adattemp = pData[1];  // heart_rate
@@ -862,7 +824,7 @@ void atlagolas() {
   if (szamlalo > 0) {
     szamlalo--;
     teljesitmenytemp += adat;
-  } else if (szamlalo < 0 || szamlalo > intervallum)  // hiba, nem lehet nullánál kisebb vagy az intervallumnal nagyobb
+  } else if (szamlalo > intervallum)  // hiba, nem lehet nullánál kisebb vagy az intervallumnal nagyobb
   {
     szamlalo = intervallum;
   }
@@ -877,7 +839,7 @@ void atlagolas() {
 void ventillatorvezerles() {
 
   if (teljesitmeny > 0 && !teszteles) {
-    fct_WatchdogReset;
+    fct_WatchdogReset();
   }
 
   if (!releteszt && vent) {
@@ -1131,8 +1093,8 @@ void eeprom_check() {
       Serial.println("Formatting EEPROM...");
     for (uint8_t i = 0; i < memoria_meret; i++) {
       EEPROM.write(i, 0);
-      EEPROM.commit();
     }
+    EEPROM.commit();
     EEPROM.write(0, 0x55);
     EEPROM.write(1, 0xAA);
     EEPROM.commit();
@@ -1156,7 +1118,7 @@ void eeprom_commit() {
 
 void checkAndReset(int value, uint32_t defaultValue, uint16_t address, const char *name) {
   uint32_t upperLimit = 600000;
-  if (reset || value < 0 || value > upperLimit || ZONE_1 == 0 || ZONE_2 == 0 || sprintzona == 0 || erzekelo == 0 || kesleltetes2 == 0 || kesleltetes3 == 0 || kesleltetessprint == 0 || kesleltetesend == 0)  // szuroprobaszeruen megnez par erteket eeprom.check utan
+  if (reset || value < 0 || static_cast<uint32_t>(value) > upperLimit)
   {
     value = defaultValue;
     EEPROM.put(address, value);
@@ -1212,9 +1174,6 @@ void blekliens() {
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, ESP_PWR_LVL_P9);  // bluetooth modul teljesitmenye
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
   esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9);
-  int pwrAdv = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_ADV);
-  int pwrScan = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_SCAN);
-  int pwrDef = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT);
   if (stopServer == false)
     WebSerial.println("Üdvözli az ESP32 ventillátor vezérlő! Csatlakozás a BLE eszközhöz...");
   BLEScan *pBLEScan = BLEDevice::getScan();
@@ -1265,7 +1224,7 @@ void fct_ledUpdate() {
 }
 
 void fct_Watchdog() {
-  if (watchdogCounter < 0 || watchdogCounter > timetosleep)  // ha gond lenne, ill ha adat == 0
+  if (watchdogCounter > timetosleep)  // ha gond lenne, ill ha adat == 0
   {
     watchdogCounter = 0;  // watchdogreset
   }
@@ -1393,7 +1352,7 @@ void ledPwmBlinking(int blinkNumber) {
 
 void fct_counterFromBoot() {
 
-  if (fromBootCounter < 0)  // ha gond lenne
+  if (fromBootCounter > serverEnd)  // ha gond lenne
   {
     fromBootCounter = 0;
   }
@@ -1422,7 +1381,7 @@ void fct_counterFromBoot() {
 
 void fct_goToSleep() {
   delay(500);
-  if (bootCounter < 0 || bootCounter > 2) {
+  if (bootCounter > 2) {
     if (stopServer == false)
       Serial.print("bootCounter parameter hiba!");
     bootCounter = 0;
@@ -1637,15 +1596,7 @@ void setup() {
   stopServer = false;
   Serial.print("Hutesuzemmod aktív?: ");
   Serial.println(hutesUzemmod);
-  if (hutesUzemmod < 0 || hutesUzemmod > 1 || teszteles < 0 || teszteles > 1 || kalibralas < 0 || kalibralas > 1) {
-    kalibralas = false;
-    hutesUzemmod = false;
-    EEPROM.put(140, hutesUzemmod);
-    eeprom_commit();
-    teszteles = false;
-    Serial.println("hutesUzemmod/teszteles/kalibralas parameter hiba!");
-  }
-  Serial.print("Tesztelés aktív?: ");
+    Serial.print("Tesztelés aktív?: ");
   Serial.println(teszteles);
   if (!teszteles && !hutesUzemmod && !kalibralas)  // teszteleshez
   {
@@ -1668,25 +1619,8 @@ void loop() {
   time_now = millis();
   if (time_now - time_elapsedtime >= period) {
     time_elapsedtime = time_now;
-    if (kalibralas < 0 || kalibralas > 1) {
-      kalibralas = false;
-      if (stopServer == false)
-        Serial.println("kalibralas parameter hiba!");
-    }
     if (!kalibralas) {
-      if (hutesUzemmod < 0 || hutesUzemmod > 1) {
-        hutesUzemmod = false;
-        EEPROM.put(140, hutesUzemmod);
-        eeprom_commit();
-        if (stopServer == false)
-          Serial.println("hutesUzemmod parameter hiba!");
-      }
       if (!hutesUzemmod) {
-        if (teszteles < 0 || teszteles > 1) {
-          teszteles = false;
-          if (stopServer == false)
-            Serial.println("teszteles parameter hiba!");
-        }
         readeepromparameter();
         if (teszteles) {
           if (stopServer == false)
@@ -1769,5 +1703,6 @@ void loop2(void *pvParameter) {
     OnStateLed.update();
     OnStateLedWithWifi.update();
     button.tick();
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
